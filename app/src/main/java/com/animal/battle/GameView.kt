@@ -124,7 +124,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         try {
             when (mode) {
                 GameMode.MENU -> renderer.renderMenu(canvas, save, screenW, screenH, menuButtons)
-                GameMode.SHOP -> renderer.renderShop(canvas, save, screenW, screenH, shopButtons)
+                GameMode.SHOP -> synchronized(shopButtons) {
+                    renderer.renderShop(canvas, save, screenW, screenH, shopButtons)
+                }
                 GameMode.PLAYING, GameMode.GAME_OVER -> {
                     var sx = 0f
                     var sy = 0f
@@ -276,19 +278,21 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     }
 
     private fun buildShopButtons() {
-        shopButtons.clear()
-        val w = screenW
-        val h = screenH
-        shopButtons.add(UIButton("back", RectF(w * 0.06f, h * 0.035f, w * 0.28f, h * 0.085f), "返回", "", true, 0xFF7E57C2.toInt()))
+        synchronized(shopButtons) {
+            shopButtons.clear()
+            val w = screenW
+            val h = screenH
+            shopButtons.add(UIButton("back", RectF(w * 0.06f, h * 0.035f, w * 0.28f, h * 0.085f), "返回", "", true, 0xFF7E57C2.toInt()))
 
-        var y = h * 0.52f
-        val itemH = h * 0.065f
-        for (def in GameConfig.PERM_UPGRADES) {
-            val lv = save.permLevel(def.id)
-            val cost = save.permNextCost(def)
-            val sub = if (cost < 0) "已满级" else "Lv $lv · $cost 金币"
-            shopButtons.add(UIButton("perm_${def.id.name}", RectF(w * 0.05f, y, w * 0.95f, y + itemH), def.name, sub, cost >= 0 && save.coins >= cost, 0xFF3E6B2E.toInt()))
-            y += itemH + h * 0.012f
+            var y = h * 0.52f
+            val itemH = h * 0.065f
+            for (def in GameConfig.PERM_UPGRADES) {
+                val lv = save.permLevel(def.id)
+                val cost = save.permNextCost(def)
+                val sub = if (cost < 0) "已满级" else "Lv $lv · $cost 金币"
+                shopButtons.add(UIButton("perm_${def.id.name}", RectF(w * 0.05f, y, w * 0.95f, y + itemH), def.name, sub, cost >= 0 && save.coins >= cost, 0xFF3E6B2E.toInt()))
+                y += itemH + h * 0.012f
+            }
         }
     }
 

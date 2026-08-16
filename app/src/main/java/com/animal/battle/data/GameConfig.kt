@@ -63,7 +63,7 @@ object GameConfig {
             return (base + extra).coerceAtMost(420f)
         }
 
-        // 剑从主角中心向外辐射（orbitRadius=0），修复贴身穿刺打不到的问题
+        // 剑从主角中心向外辐射（碰撞用，覆盖贴身怪）
         fun orbitRadius(level: Int) = 0f
 
         // 伤害：基础每级 +15%；8 级后额外每级 +10%
@@ -73,10 +73,10 @@ object GameConfig {
             return m
         }
 
-        // 旋转速度（弧度/秒）：基础 2.6；8 级后每级 +5%
+        // 旋转速度（弧度/秒）：基础 2.6；8 级后每级 +5%；上限 8 弧度/秒（防高速视觉静止）
         fun rotationSpeed(level: Int): Float {
             val base = 2.6f
-            return if (level > 8) base * (1f + (level - 8) * 0.05f) else base
+            return (if (level > 8) base * (1f + (level - 8) * 0.05f) else base).coerceAtMost(8f)
         }
     }
 

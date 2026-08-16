@@ -158,12 +158,14 @@ class Renderer(private val ctx: android.content.Context) {
             val a = baseAngle + i * step
             val cosA = cos(a.toDouble()).toFloat()
             val sinA = sin(a.toDouble()).toFloat()
-            // 剑尖精确在外侧（p + 方向*swordLen），剑柄在主角中心
-            val tipX = p.x + cosA * swordLen
-            val tipY = p.y + sinA * swordLen
+            // 剑柄在主角外缘（p.radius），剑尖在外侧（p.radius + swordLen），剑身整体在外层不覆盖主角
+            val handleX = p.x + cosA * p.radius
+            val handleY = p.y + sinA * p.radius
+            val tipX = p.x + cosA * (p.radius + swordLen)
+            val tipY = p.y + sinA * (p.radius + swordLen)
             // 画图中心 = 剑身中点 = (柄 + 尖)/2
-            val mx = (p.x + tipX) / 2f
-            val my = (p.y + tipY) / 2f
+            val mx = (handleX + tipX) / 2f
+            val my = (handleY + tipY) / 2f
 
             c.save()
             c.translate(mx, my)
@@ -288,6 +290,16 @@ class Renderer(private val ctx: android.content.Context) {
                     fill.color = 0xFFE53935.toInt()
                     c.drawCircle(pk.x, y, 9f, fill)
                 }
+            }
+            Pickup.Type.MAGNET -> {
+                // 吸铁石（U 型磁铁，蓝红两色）
+                fill.color = 0xFF42A5F5.toInt()
+                c.drawRect(pk.x - 12f, y - 10f, pk.x - 5f, y + 10f, fill)
+                fill.color = 0xFFEF5350.toInt()
+                c.drawRect(pk.x + 5f, y - 10f, pk.x + 12f, y + 10f, fill)
+                fill.color = 0xFFB0BEC5.toInt()
+                c.drawRect(pk.x - 12f, y - 12f, pk.x + 12f, y - 7f, fill)
+                c.drawRect(pk.x - 12f, y + 7f, pk.x + 12f, y + 12f, fill)
             }
         }
     }

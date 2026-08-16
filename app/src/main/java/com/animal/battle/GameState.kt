@@ -53,6 +53,7 @@ class GameState {
     var survivalTime = 0f
     var kills = 0
     var coinsEarned = 0
+    var magnetTimer = 0f   // 吸铁石持续时间（>0 时全屏吸收掉落物）
 
     // 生成
     private var spawnTimer = 0f
@@ -219,10 +220,11 @@ class GameState {
             val a = orbitalAngle + i * step
             val ca = cos(a.toDouble()).toFloat()
             val sa = sin(a.toDouble()).toFloat()
-            val ax = p.x + ca * orbitR
-            val ay = p.y + sa * orbitR
-            val bx = p.x + ca * (orbitR + swordLen)
-            val by = p.y + sa * (orbitR + swordLen)
+            // 碰撞线段：从主角中心到剑尖（覆盖贴身怪，即使贴脸也受伤）
+            val ax = p.x
+            val ay = p.y
+            val bx = p.x + ca * (p.radius + swordLen)
+            val by = p.y + sa * (p.radius + swordLen)
             for (e in enemies) {
                 if (!e.alive || e.weaponHitCooldown > 0f) continue
                 val d = distToSegment(e.x, e.y, ax, ay, bx, by)
@@ -532,6 +534,10 @@ class GameState {
         // 血包：5% 起，随时间递增到 12%，改善后期生存
         val heartChance = (0.05f + (survivalTime / 600f) * 0.07f).coerceAtMost(0.12f)
         if (Math.random() < heartChance) spawnPickup(Pickup.Type.HEART, e.x, e.y, 1)
+        // 吸铁石：Boss 必掉，精英/熊 15% 概率掉
+        val dropMagnet = e.type == GameConfig.EnemyType.BOSS ||
+            ((e.type == GameConfig.EnemyType.ELITE || e.type == GameConfig.EnemyType.BEAR) && Math.random() < 0.15)
+        if (dropMagnet) spawnPickup(Pickup.Type.MAGNET, e.x, e.y, 1)
         // 爆炸粒子
         val count = if (e.type == GameConfig.EnemyType.BOSS) 40 else if (e.type == GameConfig.EnemyType.ELITE) 24 else 12
         emit(e.x, e.y, count, e.type.color, 200f, 5f, 0.5f)
@@ -568,6 +574,8 @@ class GameState {
 
     private fun updatePickups(dt: Float) {
         val p = player
+        // 磁铁计时递减
+        if (magnetTimer > 0f) magnetTimer -= dt
         for (pk in pickups) {
             if (!pk.alive) continue
             pk.life -= dt
@@ -575,7 +583,8 @@ class GameState {
             val dx = p.x - pk.x
             val dy = p.y - pk.y
             val d2 = dx * dx + dy * dy
-            val range = p.pickupRange
+            // 磁铁生效期间全屏吸收
+            val range = if (magnetTimer > 0f) 10000f else p.pickupRange
             if (d2 <= range * range) pk.attracted = true
             if (pk.attracted) {
                 val d = sqrt(d2).coerceAtLeast(1f)
@@ -620,6 +629,11 @@ class GameState {
                 player.heal(player.maxHp * 0.1f)
                 sound?.play(SoundManager.HEAL, 0.5f)
                 emit(pk.x, pk.y, 8, 0xFFFF5252.toInt(), 80f, 4f, 0.3f)
+            }
+            Pickup.Type.MAGNET -> {
+                magnetTimer = 6f   // 6 秒全屏吸收掉落物
+                sound?.play(SoundManager.COIN, 0.5f)
+                emit(player.x, player.y, 24, 0xFF4FC3F7.toInt(), 260f, 5f, 0.6f)
             }
         }
     }
