@@ -208,7 +208,7 @@ class GameState {
     private fun updateOrbitalWeapon(dt: Float) {
         val p = player
         val count = GameConfig.SwordConfig.count(p.level)
-        val swordLen = GameConfig.SwordConfig.swordLength(p.radius)
+        val swordLen = GameConfig.SwordConfig.swordLength(p.radius, p.level)
         val orbitR = GameConfig.SwordConfig.orbitRadius(p.level)
         val dmg = p.attack * GameConfig.SwordConfig.damageMult(p.level)
         val swordWidth = 18f
@@ -275,7 +275,9 @@ class GameState {
         spawnTimer -= dt
         if (spawnTimer <= 0f) {
             spawnTimer = spawnInterval
-            spawnInterval = (2.0f * 0.978f.pow(survivalTime / 8f)).coerceAtLeast(0.5f)
+            // lion（熊）出现后的阶段（120 秒）降低生成频率：下限从 0.5 提到 1.2
+            val minInterval = if (survivalTime > 120f) 1.2f else 0.5f
+            spawnInterval = (2.0f * 0.978f.pow(survivalTime / 8f)).coerceAtLeast(minInterval)
             spawnWave()
         }
         // 精英怪每 2 分钟一只（散射弹幕）
@@ -380,7 +382,8 @@ class GameState {
             if (!e.alive || e.type != GameConfig.EnemyType.ELITE) continue
             e.eliteFireTimer -= dt
             if (e.eliteFireTimer > 0f) continue
-            e.eliteFireTimer = GameConfig.EliteConfig.FIRE_INTERVAL
+            // lion 阶段（120 秒）后降低弹幕攻击频率，避免满屏子弹
+            e.eliteFireTimer = if (survivalTime > 120f) 3.5f else GameConfig.EliteConfig.FIRE_INTERVAL
             val ang = atan2(p.y - e.y, p.x - e.x)
             val count = GameConfig.EliteConfig.FAN_COUNT
             val spread = 0.35f

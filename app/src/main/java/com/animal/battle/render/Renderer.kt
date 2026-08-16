@@ -68,8 +68,17 @@ class Renderer(private val ctx: android.content.Context) {
 
     private fun loadBitmaps() {
         val res = ctx.resources
-        fun load(name: String): Bitmap? =
-            BitmapFactory.decodeResource(res, res.getIdentifier(name, "drawable", ctx.packageName))
+        // 带 inSampleSize 的加载，避免超大图导致 OOM（闪退修复）
+        fun load(name: String, maxSize: Int = 1024): Bitmap? {
+            val id = res.getIdentifier(name, "drawable", ctx.packageName)
+            if (id == 0) return null
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeResource(res, id, bounds)
+            var sample = 1
+            while (bounds.outWidth / sample > maxSize || bounds.outHeight / sample > maxSize) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            return BitmapFactory.decodeResource(res, id, opts)
+        }
 
         // 主角：cow
         val cow = load("cow")
@@ -96,7 +105,7 @@ class Renderer(private val ctx: android.content.Context) {
         back3Bitmap = load("back3")
         armsBitmap = load("arms")
         petcowBitmap = load("petcow")
-        cowuogradeBitmap = load("cowuograde")
+        cowuogradeBitmap = load("cowuograde", 640)  // 养成页大图降采样
         skillIcons[0] = load("skill1")
         skillIcons[1] = load("skill2")
         skillIcons[2] = load("skillmax")
@@ -132,50 +141,38 @@ class Renderer(private val ctx: android.content.Context) {
     private val pickupRect = RectF()
 
     /** 绘制旋转大宝剑 */
-    private val swordSrcRect = android.graphics.Rect()
     private val swordDstRect = RectF()
 
-    /** 旋转大宝剑：剑头朝外尖刺式 + 剑尖白光 + 剑身光晕（视觉加工） */
+    /** 旋转大宝剑：整张「牛头+剑」图（已抠白底），剑尖朝外尖刺式 + 剑尖白光 */
     private fun drawSwords(c: Canvas, s: GameState) {
         val p = s.player
         val bmp = armsBitmap ?: return
         val count = GameConfig.SwordConfig.count(p.level)
-        val swordLen = GameConfig.SwordConfig.swordLength(p.radius)
+        val swordLen = GameConfig.SwordConfig.swordLength(p.radius, p.level)
         val orbitR = GameConfig.SwordConfig.orbitRadius(p.level)
         val baseAngle = s.orbitalAngle
         val step = (Math.PI * 2.0 / count).toFloat()
-
-        // arms.png 中剑的部分（右下角区域：剑从左上到右下的对角线）
-        val aw = bmp.width
-        val ah = bmp.height
-        swordSrcRect.set(aw / 2, ah / 2, aw, ah)
 
         for (i in 0 until count) {
             val a = baseAngle + i * step
             val cosA = cos(a.toDouble()).toFloat()
             val sinA = sin(a.toDouble()).toFloat()
-            // 剑柄位置（玩家边缘）
-            val handleX = p.x + cosA * orbitR
-            val handleY = p.y + sinA * orbitR
-            // 剑尖位置（外围，尖刺扩散）
+            // 剑中点（剑柄在玩家边缘、剑尖在外围）
+            val mx = p.x + cosA * (orbitR + swordLen / 2f)
+            val my = p.y + sinA * (orbitR + swordLen / 2f)
+            // 剑尖位置（外围）
             val tipX = p.x + cosA * (orbitR + swordLen)
             val tipY = p.y + sinA * (orbitR + swordLen)
-            val mx = (handleX + tipX) / 2f
-            val my = (handleY + tipY) / 2f
 
             c.save()
             c.translate(mx, my)
-            // arms.png 中剑尖朝右下 45°，减 45° 让剑尖朝 a 方向（外侧）
+            // arms.png 剑尖在右下 45° 方向，减 45° 让剑尖朝 a（外侧），牛头朝内
             c.rotate((a * 180 / Math.PI).toFloat() - 45f)
-            val dstW = swordLen * 0.75f
-            val dstH = swordLen * 0.38f
-            swordDstRect.set(-dstW / 2f, -dstH / 2f, dstW / 2f, dstH / 2f)
-            c.drawBitmap(bmp, swordSrcRect, swordDstRect, bitmapPaint)
+            val size = swordLen * 0.95f
+            swordDstRect.set(-size / 2f, -size / 2f, size / 2f, size / 2f)
+            c.drawBitmap(bmp, null, swordDstRect, bitmapPaint)
             c.restore()
 
-            // 剑身半透明光晕（让剑融入场景）
-            fill.color = 0x33000000
-            c.drawCircle(mx, my, swordLen * 0.42f, fill)
             // 剑尖白光
             fill.color = 0xCCFFFFFF.toInt()
             c.drawCircle(tipX, tipY, 5f, fill)
@@ -265,7 +262,8 @@ class Renderer(private val ctx: android.content.Context) {
         when (pk.type) {
             Pickup.Type.EXP -> {
                 val bmp = expBitmap ?: return
-                val size = 18f
+                // 高级经验球（value>=10，如熊/lion 掉落）更大
+                val size = if (pk.value >= 10) 28f else 18f
                 pickupRect.set(pk.x - size / 2f, y - size / 2f, pk.x + size / 2f, y + size / 2f)
                 c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
             }

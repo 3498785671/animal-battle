@@ -136,7 +136,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                     canvas.save()
                     canvas.translate(sx, sy)
                     canvas.scale(scale, scale)
-                    renderer.renderWorld(canvas, state)
+                    synchronized(state) {
+                        renderer.renderWorld(canvas, state)
+                    }
                     canvas.restore()
 
                     renderer.renderHUD(canvas, state, screenW, screenH, scale)

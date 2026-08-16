@@ -32,7 +32,7 @@ object GameConfig {
         val coin: Int,
     ) {
         WOLF(30f, 33f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
-        BEAR(140f, 16f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
+        BEAR(140f, 16f, 20f, 28f, 15, 0xFF8D6E63.toInt(), 3),     // 熊(lion)：慢、肉，掉高级经验球
         BOAR(60f, 43f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),      // 野猪：冲锋
         SNAKE(45f, 24f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),     // 蛇：远程减速
         ELITE(400f, 23f, 25f, 45f, 15, 0xFFB71C1C.toInt(), 8),   // 精英：体型更大
@@ -55,8 +55,13 @@ object GameConfig {
     // ===== 旋转大宝剑（主角攻击，废弃五阶变色）=====
     object SwordConfig {
         fun count(level: Int) = level.coerceIn(1, 8)        // 初始 1 把，每级 +1，上限 8
-        fun swordLength(playerRadius: Float) = playerRadius * 5f  // 剑长 ≈ 角色高度(直径) × 2.5
-        fun orbitRadius(level: Int) = (50f + level * 2f).coerceAtMost(150f)
+        // 剑长：基础 ≈ 角色高度(直径) × 2.5；8 级后每级继续增大剑身，扩大攻击范围
+        fun swordLength(playerRadius: Float, level: Int): Float {
+            val base = playerRadius * 5f
+            val extra = if (level > 8) (level - 8) * 7f else 0f
+            return (base + extra).coerceAtMost(340f)
+        }
+        fun orbitRadius(level: Int) = (50f + level * 2f).coerceAtMost(160f)
         fun damageMult(level: Int) = 1f + level * 0.15f
     }
 
@@ -143,11 +148,11 @@ object GameConfig {
     )
 
     val PERM_UPGRADES: List<PermUpgradeDef> = listOf(
-        PermUpgradeDef(PermUpgradeId.ATK, "攻击力 +10%", 100, 20, 1.55f, 0.10f),
-        PermUpgradeDef(PermUpgradeId.HP, "最大生命 +10%", 100, 20, 1.55f, 0.10f),
-        PermUpgradeDef(PermUpgradeId.SPEED, "移动速度 +4%", 120, 15, 1.6f, 0.04f),
-        PermUpgradeDef(PermUpgradeId.EXP, "经验获取 +10%", 150, 15, 1.65f, 0.10f),
-        PermUpgradeDef(PermUpgradeId.COIN, "金币获取 +10%", 150, 15, 1.65f, 0.10f),
+        PermUpgradeDef(PermUpgradeId.ATK, "攻击力 +10%", 50, 20, 1.35f, 0.10f),
+        PermUpgradeDef(PermUpgradeId.HP, "最大生命 +10%", 50, 20, 1.35f, 0.10f),
+        PermUpgradeDef(PermUpgradeId.SPEED, "移动速度 +4%", 60, 15, 1.35f, 0.04f),
+        PermUpgradeDef(PermUpgradeId.EXP, "经验获取 +10%", 75, 15, 1.4f, 0.10f),
+        PermUpgradeDef(PermUpgradeId.COIN, "金币获取 +10%", 75, 15, 1.4f, 0.10f),
     )
 
     // 结算金币：基础 + 击杀数 * 系数
