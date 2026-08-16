@@ -43,6 +43,16 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     private val menuButtons = ArrayList<UIButton>()
     private val shopButtons = ArrayList<UIButton>()
     private val gameOverButtons = ArrayList<UIButton>()
+    private val pauseBtn = RectF()
+    private val homeBtn = RectF()
+    private val confirmYesBtn = RectF()
+    private val confirmNoBtn = RectF()
+
+    // 状态
+    @Volatile
+    private var paused = false
+    @Volatile
+    private var homeConfirmActive = false
 
     // 线程
     @Volatile
@@ -90,7 +100,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 last = now
                 acc += frame
                 while (acc >= fixedDt) {
-                    if (mode == GameMode.PLAYING && !state.player.isDead) {
+                    if (mode == GameMode.PLAYING && !paused && !state.player.isDead) {
                         synchronized(state) {
                             state.player.inputX = joystick.inputX
                             state.player.inputY = joystick.inputY
@@ -128,6 +138,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                     renderer.renderHUD(canvas, state, screenW, screenH, scale)
                     renderer.renderJoystick(canvas, joystick)
                     renderer.renderSkillButtons(canvas, state, skillButtons)
+                    if (mode == GameMode.PLAYING) renderer.renderPauseHome(canvas, pauseBtn, homeBtn)
+
+                    if (homeConfirmActive) {
+                        renderer.renderHomeConfirm(canvas, screenW, screenH, confirmYesBtn, confirmNoBtn)
+                    } else if (paused && mode == GameMode.PLAYING) {
+                        renderer.renderPauseOverlay(canvas, screenW, screenH)
+                    }
 
                     if (mode == GameMode.GAME_OVER) {
                         renderer.renderGameOver(canvas, state, save, screenW, screenH, gameOverButtons)
@@ -179,6 +196,25 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 val id = event.getPointerId(idx)
                 val x = event.getX(idx)
                 val y = event.getY(idx)
+                // 主页确认弹层
+                if (homeConfirmActive) {
+                    if (confirmYesBtn.contains(x, y)) { backToMenu(); return }
+                    if (confirmNoBtn.contains(x, y)) { homeConfirmActive = false; return }
+                    return
+                }
+                // 暂停键
+                if (pauseBtn.contains(x, y)) {
+                    paused = !paused
+                    return
+                }
+                // 主页键（弹确认）
+                if (homeBtn.contains(x, y)) {
+                    paused = true
+                    homeConfirmActive = true
+                    return
+                }
+                if (paused) return
+                // 技能按钮
                 for ((i, b) in skillButtons.withIndex()) {
                     if (b.hit(x, y)) {
                         synchronized(state) { state.useSkill(i) }
@@ -224,6 +260,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         gameOverButtons.clear()
         gameOverButtons.add(UIButton("retry", RectF(w * 0.2f, h * 0.60f, w * 0.8f, h * 0.68f), "再来一局", "", true, 0xFF5C9E31.toInt()))
         gameOverButtons.add(UIButton("menu", RectF(w * 0.2f, h * 0.72f, w * 0.8f, h * 0.80f), "返回菜单", "", true, 0xFF7E57C2.toInt()))
+
+        // 暂停 / 主页键（右上角，计时下方）
+        pauseBtn.set(w - w * 0.16f, h * 0.10f, w - w * 0.02f, h * 0.17f)
+        homeBtn.set(w - w * 0.16f, h * 0.19f, w - w * 0.02f, h * 0.26f)
+        // 主页确认弹层按钮
+        confirmYesBtn.set(w * 0.22f, h * 0.50f, w * 0.48f, h * 0.58f)
+        confirmNoBtn.set(w * 0.52f, h * 0.50f, w * 0.78f, h * 0.58f)
     }
 
     private fun buildShopButtons() {
@@ -232,21 +275,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         val h = screenH
         shopButtons.add(UIButton("back", RectF(w * 0.06f, h * 0.035f, w * 0.28f, h * 0.085f), "返回", "", true, 0xFF7E57C2.toInt()))
 
-        var y = h * 0.145f
+        var y = h * 0.52f
         val itemH = h * 0.065f
         for (def in GameConfig.PERM_UPGRADES) {
             val lv = save.permLevel(def.id)
             val cost = save.permNextCost(def)
             val sub = if (cost < 0) "已满级" else "Lv $lv · $cost 金币"
             shopButtons.add(UIButton("perm_${def.id.name}", RectF(w * 0.05f, y, w * 0.95f, y + itemH), def.name, sub, cost >= 0 && save.coins >= cost, 0xFF3E6B2E.toInt()))
-            y += itemH + h * 0.012f
-        }
-        y += h * 0.015f
-        for (char in GameConfig.CHARACTERS) {
-            val unlocked = save.isUnlocked(char.id)
-            val isCur = save.currentCharacter == char.id
-            val sub = if (isCur) "使用中" else if (unlocked) "选择" else "${char.cost} 金币"
-            shopButtons.add(UIButton("char_${char.id}", RectF(w * 0.05f, y, w * 0.95f, y + itemH), char.name, sub, true, 0xFF6D4C41.toInt()))
             y += itemH + h * 0.012f
         }
     }
@@ -272,20 +307,9 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 if (cost >= 0 && save.coins >= cost) {
                     save.addCoins(-cost)
                     save.setPermLevel(pid, save.permLevel(pid) + 1)
+                    renderer.shopGlowUntil = System.currentTimeMillis() + 700  // 升级光芒
                     buildShopButtons()
                 }
-            }
-            id.startsWith("char_") -> {
-                val cid = id.removePrefix("char_")
-                val def = GameConfig.CHARACTERS.first { it.id == cid }
-                if (save.isUnlocked(cid)) {
-                    save.currentCharacter = cid
-                } else if (save.coins >= def.cost) {
-                    save.addCoins(-def.cost)
-                    save.unlock(cid)
-                    save.currentCharacter = cid
-                }
-                buildShopButtons()
             }
         }
     }
@@ -297,9 +321,18 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         }
     }
 
+    private fun backToMenu() {
+        paused = false
+        homeConfirmActive = false
+        stopBgm()
+        mode = GameMode.MENU
+    }
+
     private fun startGame() {
         val char = GameConfig.CHARACTERS.firstOrNull { it.id == save.currentCharacter } ?: GameConfig.CHARACTERS[0]
         state.character = char
+        paused = false
+        homeConfirmActive = false
         state.permAtk = save.permLevel(GameConfig.PermUpgradeId.ATK) * 0.10f
         state.permHp = save.permLevel(GameConfig.PermUpgradeId.HP) * 0.10f
         state.permSpeed = save.permLevel(GameConfig.PermUpgradeId.SPEED) * 0.04f

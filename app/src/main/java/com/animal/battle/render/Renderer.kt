@@ -9,7 +9,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import com.animal.battle.R
 import com.animal.battle.GameState
-import com.animal.battle.SummonFox
+import com.animal.battle.SummonCow
 import com.animal.battle.data.GameConfig
 import com.animal.battle.data.SaveManager
 import com.animal.battle.entity.Bullet
@@ -45,12 +45,14 @@ class Renderer(private val ctx: android.content.Context) {
     private val eliteFrames = arrayOfNulls<Bitmap>(2)
     private val bossFrames = arrayOfNulls<Bitmap>(2)
     private var expBitmap: Bitmap? = null
-    private var orbWhite: Bitmap? = null
-    private var orbGreen: Bitmap? = null
-    private var orbBlue: Bitmap? = null
-    private var orbPurple: Bitmap? = null
-    private var orbRed: Bitmap? = null
+    private var bloodbagBitmap: Bitmap? = null
     private var bgBitmap: Bitmap? = null
+    private var back2Bitmap: Bitmap? = null
+    private var back3Bitmap: Bitmap? = null
+    private var armsBitmap: Bitmap? = null
+    private var petcowBitmap: Bitmap? = null
+    private var cowuogradeBitmap: Bitmap? = null
+    private val skillIcons = arrayOfNulls<Bitmap>(3)
 
     // 背景装饰点
     private val deco = ArrayList<FloatArray>(40)
@@ -87,12 +89,16 @@ class Renderer(private val ctx: android.content.Context) {
         bossFrames[0] = elephant; bossFrames[1] = elephant   // Boss → 大象
 
         expBitmap = load("exp")
-        orbWhite = load("orb_white")
-        orbGreen = load("orb_green")
-        orbBlue = load("orb_blue")
-        orbPurple = load("orb_purple")
-        orbRed = load("orb_red")
+        bloodbagBitmap = load("bloodbag")
         bgBitmap = load("back")
+        back2Bitmap = load("back2")
+        back3Bitmap = load("back3")
+        armsBitmap = load("arms")
+        petcowBitmap = load("petcow")
+        cowuogradeBitmap = load("cowuograde")
+        skillIcons[0] = load("skill1")
+        skillIcons[1] = load("skill2")
+        skillIcons[2] = load("skillmax")
     }
 
     private fun framesForType(type: GameConfig.EnemyType): Array<Bitmap?> = when (type) {
@@ -106,47 +112,43 @@ class Renderer(private val ctx: android.content.Context) {
         GameConfig.EnemyType.BOSS -> bossFrames
     }
 
-    private fun orbForTier(tier: Int): Bitmap? = when (tier) {
-        1 -> orbGreen; 2 -> orbBlue; 3 -> orbPurple; 4 -> orbRed; else -> orbWhite
-    }
-
     // ================= 世界渲染（在 scale 内调用） =================
     fun renderWorld(c: Canvas, s: GameState) {
         drawBackground(c, s)
-        // 环绕武器（底层，在角色下）
-        drawOrbs(c, s)
+        drawSwords(c, s)
         for (pk in s.pickups) if (pk.alive) drawPickup(c, pk)
         for (e in s.enemies) if (e.alive) drawEnemy(c, e, s.survivalTime)
-        for (f in s.summonFoxes) drawSummonFox(c, s.player, f)
+        for (f in s.summonCows) drawSummonCow(c, f)
         drawPlayer(c, s.player)
         for (b in s.bullets) if (b.alive) drawBullet(c, b)
         for (p in s.particles) if (p.alive) drawParticle(c, p)
     }
 
-    private val orbRect = RectF()
+    private val swordRect = RectF()
+    private val skillRect = RectF()
     private val enemyRect = RectF()
     private val playerRect = RectF()
     private val pickupRect = RectF()
 
-    /** 绘制玩家周围的环绕能量体（白绿蓝紫红五阶） */
-    private fun drawOrbs(c: Canvas, s: GameState) {
+    /** 绘制旋转大宝剑 */
+    private fun drawSwords(c: Canvas, s: GameState) {
         val p = s.player
-        val tier = GameConfig.WeaponTiers.tierFor(p.level)
-        val count = GameConfig.WeaponTiers.count(tier)
-        val orbR = GameConfig.WeaponTiers.orbRadius(tier)
-        val orbitR = GameConfig.WeaponTiers.orbitRadius(p.level)
-        val bmp = orbForTier(tier) ?: return
-        // 与 updateOrbitalWeapon 同步的角速度
-        val baseAngle = s.orbitalAngle // private 但同文件可见（实际不行，下面补救）
-        // 公共访问：用 s.survivalTime * 2.6f 估算（GameState.orbitalAngle private，从 GameState 暴露）
-
+        val bmp = armsBitmap ?: return
+        val count = GameConfig.SwordConfig.count(p.level)
+        val swordLen = GameConfig.SwordConfig.swordLength(p.radius)
+        val orbitR = GameConfig.SwordConfig.orbitRadius(p.level)
+        val baseAngle = s.orbitalAngle
         val step = (Math.PI * 2.0 / count).toFloat()
+        val sw = swordLen / 3f
         for (i in 0 until count) {
             val a = baseAngle + i * step
-            val ox = p.x + cos(a.toDouble()).toFloat() * orbitR
-            val oy = p.y + sin(a.toDouble()).toFloat() * orbitR
-            orbRect.set(ox - orbR, oy - orbR, ox + orbR, oy + orbR)
-            c.drawBitmap(bmp, null, orbRect, bitmapPaint)
+            val mx = p.x + cos(a.toDouble()).toFloat() * (orbitR + swordLen / 2f)
+            val my = p.y + sin(a.toDouble()).toFloat() * (orbitR + swordLen / 2f)
+            c.save()
+            c.rotate((a * 180 / Math.PI).toFloat() + 90f, mx, my)
+            swordRect.set(mx - swordLen / 2f, my - sw / 2f, mx + swordLen / 2f, my + sw / 2f)
+            c.drawBitmap(bmp, null, swordRect, bitmapPaint)
+            c.restore()
         }
     }
 
@@ -196,19 +198,25 @@ class Renderer(private val ctx: android.content.Context) {
             fill.color = 0x88FFFFFF.toInt()
             c.drawCircle(e.x, e.y, e.radius, fill)
         }
+        // 怪物血条（头顶横条，受伤后显示）
+        if (e.hp < e.maxHp) {
+            val bw = e.radius * 2f
+            val bh = 4f
+            val bx = e.x - bw / 2f
+            val by = e.y - e.radius - 10f
+            fill.color = 0x88000000.toInt()
+            c.drawRect(bx, by, bx + bw, by + bh, fill)
+            val ratio = (e.hp / e.maxHp).coerceIn(0f, 1f)
+            fill.color = 0xFFE53935.toInt()
+            c.drawRect(bx, by, bx + bw * ratio, by + bh, fill)
+        }
     }
 
-    private fun drawSummonFox(c: Canvas, p: Player, f: SummonFox) {
-        val x = p.x + cos(f.angle.toDouble()).toFloat() * 70f
-        val y = p.y + sin(f.angle.toDouble()).toFloat() * 70f
-        fill.color = 0xFFFFD54F.toInt()
-        c.drawCircle(x, y, 13f, fill)
-        fill.color = 0xFFFFFFFF.toInt()
-        c.drawCircle(x - 4f, y - 3f, 4f, fill)
-        c.drawCircle(x + 4f, y - 3f, 4f, fill)
-        fill.color = 0xFF263238.toInt()
-        c.drawCircle(x - 4f, y - 3f, 2f, fill)
-        c.drawCircle(x + 4f, y - 3f, 2f, fill)
+    private fun drawSummonCow(c: Canvas, f: SummonCow) {
+        val bmp = petcowBitmap ?: return
+        val size = 44f
+        pickupRect.set(f.x - size / 2f, f.y - size / 2f, f.x + size / 2f, f.y + size / 2f)
+        c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
     }
 
     // ================= 子弹 / 掉落 / 粒子 =================
@@ -222,23 +230,33 @@ class Renderer(private val ctx: android.content.Context) {
     }
 
     private fun drawPickup(c: Canvas, pk: Pickup) {
-        val bmp = expBitmap ?: return
         val bob = sin((pk.bobPhase + System.currentTimeMillis() / 200.0)).toFloat() * 3f
         val y = pk.y + bob
-        val size = when (pk.type) {
-            Pickup.Type.EXP -> 18f
-            Pickup.Type.COIN -> 18f
-            Pickup.Type.HEART -> 18f
+        when (pk.type) {
+            Pickup.Type.EXP -> {
+                val bmp = expBitmap ?: return
+                val size = 18f
+                pickupRect.set(pk.x - size / 2f, y - size / 2f, pk.x + size / 2f, y + size / 2f)
+                c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
+            }
+            Pickup.Type.COIN -> {
+                fill.color = 0xFFFFB300.toInt()
+                c.drawCircle(pk.x, y, 8f, fill)
+                fill.color = 0xFFFFE082.toInt()
+                c.drawCircle(pk.x - 2f, y - 2f, 3f, fill)
+            }
+            Pickup.Type.HEART -> {
+                val bmp = bloodbagBitmap
+                if (bmp != null) {
+                    val size = 26f
+                    pickupRect.set(pk.x - size / 2f, y - size / 2f, pk.x + size / 2f, y + size / 2f)
+                    c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
+                } else {
+                    fill.color = 0xFFE53935.toInt()
+                    c.drawCircle(pk.x, y, 9f, fill)
+                }
+            }
         }
-        pickupRect.set(pk.x - size / 2f, y - size / 2f, pk.x + size / 2f, y + size / 2f)
-        c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
-        // 叠加颜色环以区分类型
-        fill.color = when (pk.type) {
-            Pickup.Type.COIN -> 0x88FFB300.toInt()
-            Pickup.Type.HEART -> 0x88E53935.toInt()
-            Pickup.Type.EXP -> 0x00000000
-        }
-        if (fill.color != 0) c.drawCircle(pk.x, y, 12f, fill)
     }
 
     private fun drawParticle(c: Canvas, pt: Particle) {
@@ -253,46 +271,46 @@ class Renderer(private val ctx: android.content.Context) {
     fun renderHUD(c: Canvas, s: GameState, sw: Float, sh: Float, scale: Float) {
         val p = s.player
         val pad = 16f * (sw / 720f)
-        val barW = 200f * (sw / 720f)
+        val k = sw / 720f
 
-        // 血条
+        // 主角头顶环形血条（红）+ 经验条（蓝）
+        val px = p.x * scale
+        val py = p.y * scale
+        val ringR = 30f * k
+        val ringCy = py - (p.radius * scale + 26f * k)
+        stroke.style = Paint.Style.STROKE
+        stroke.color = 0x88000000.toInt()
+        stroke.strokeWidth = 7f * k
+        c.drawCircle(px, ringCy, ringR, stroke)
         val hpRatio = (p.hp / p.maxHp).coerceIn(0f, 1f)
-        fill.color = 0x55000000
-        c.drawRoundRect(RectF(pad, pad, pad + barW, pad + 26f * (sw / 720f)), 12f, 12f, fill)
-        fill.color = if (hpRatio > 0.3f) 0xFF4CAF50.toInt() else 0xFFE53935.toInt()
-        c.drawRoundRect(RectF(pad + 2f, pad + 2f, pad + 2f + (barW - 4f) * hpRatio, pad + 24f * (sw / 720f)), 10f, 10f, fill)
-        // 血量数字
-        text.color = 0xFFFFFFFF.toInt()
-        text.textSize = 20f * (sw / 720f)
-        text.textAlign = Paint.Align.LEFT
-        c.drawText("${p.hp.toInt()}/${p.maxHp.toInt()}", pad + 8f, pad + 20f * (sw / 720f), text)
-
-        // 等级 + 经验条
-        val expY = pad + 38f * (sw / 720f)
-        fill.color = 0x55000000
-        c.drawRoundRect(RectF(pad, expY, pad + barW, expY + 14f * (sw / 720f)), 7f, 7f, fill)
+        stroke.color = 0xFFE53935.toInt()
+        stroke.strokeWidth = 5f * k
+        c.drawArc(RectF(px - ringR, ringCy - ringR, px + ringR, ringCy + ringR), -90f, 360f * hpRatio, false, stroke)
         val expRatio = (p.exp.toFloat() / p.expToNext).coerceIn(0f, 1f)
-        fill.color = 0xFF42A5F5.toInt()
-        c.drawRoundRect(RectF(pad + 2f, expY + 2f, pad + 2f + (barW - 4f) * expRatio, expY + 12f * (sw / 720f)), 6f, 6f, fill)
-        text.textSize = 18f * (sw / 720f)
-        c.drawText("Lv ${p.level}", pad + 8f, expY - 6f * (sw / 720f), text)
+        stroke.color = 0xFF42A5F5.toInt()
+        stroke.strokeWidth = 5f * k
+        val r2 = ringR - 9f * k
+        c.drawArc(RectF(px - r2, ringCy - r2, px + r2, ringCy + r2), -90f, 360f * expRatio, false, stroke)
+        text.color = 0xFFFFFFFF.toInt()
+        text.textSize = 18f * k
+        text.textAlign = Paint.Align.CENTER
+        c.drawText("Lv${p.level}", px, ringCy + 6f * k, text)
+        stroke.style = Paint.Style.FILL
 
-        // 击杀 / 金币
-        text.textSize = 24f * (sw / 720f)
+        // 击杀 / 金币（左上角）
+        text.textSize = 24f * k
         text.textAlign = Paint.Align.LEFT
-        c.drawText("击杀 ${s.kills}", pad, expY + 40f * (sw / 720f), text)
-        c.drawText("金币 ${s.coinsEarned}", pad, expY + 72f * (sw / 720f), text)
+        c.drawText("击杀 ${s.kills}", pad, pad + 30f * k, text)
+        c.drawText("金币 ${s.coinsEarned}", pad, pad + 62f * k, text)
 
         // 计时（右上）
         text.textAlign = Paint.Align.RIGHT
-        text.textSize = 28f * (sw / 720f)
+        text.textSize = 28f * k
         val mm = (s.survivalTime / 60).toInt()
         val ss = (s.survivalTime % 60).toInt()
-        c.drawText("%02d:%02d".format(mm, ss), sw - pad, pad + 30f * (sw / 720f), text)
-
-        // 敌人数量
-        text.textSize = 20f * (sw / 720f)
-        c.drawText("敌人 ${s.enemies.size}", sw - pad, pad + 58f * (sw / 720f), text)
+        c.drawText("%02d:%02d".format(mm, ss), sw - pad, pad + 30f * k, text)
+        text.textSize = 20f * k
+        c.drawText("敌人 ${s.enemies.size}", sw - pad, pad + 58f * k, text)
     }
 
     fun renderJoystick(c: Canvas, joy: Joystick) {
@@ -321,17 +339,19 @@ class Renderer(private val ctx: android.content.Context) {
             // 冷却遮罩
             if (!skill.isReady) {
                 val ratio = (skill.currentCooldown / skill.def.cooldown).coerceIn(0f, 1f)
-                fill.color = 0x88000000.toInt()
+                fill.color = 0x88000000.toInt().toInt()
                 c.drawArc(RectF(cx - r, cy - r, cx + r, cy + r), -90f, 360f * ratio, true, fill)
             }
-            // 图标色
-            fill.color = skill.def.color
-            c.drawCircle(cx, cy, r * 0.55f, fill)
-            // 名称首字
-            text.color = 0xFFFFFFFF.toInt()
-            text.textSize = r * 0.6f
-            text.textAlign = Paint.Align.CENTER
-            c.drawText(skill.def.name.substring(0, 1), cx, cy + text.textSize * 0.35f, text)
+            // 技能图标
+            val icon = skillIcons.getOrNull(i)
+            if (icon != null) {
+                val ir = r * 0.85f
+                skillRect.set(cx - ir, cy - ir, cx + ir, cy + ir)
+                c.drawBitmap(icon, null, skillRect, bitmapPaint)
+            } else {
+                fill.color = skill.def.color
+                c.drawCircle(cx, cy, r * 0.55f, fill)
+            }
         }
     }
 
@@ -368,19 +388,18 @@ class Renderer(private val ctx: android.content.Context) {
 
     // ================= 主菜单 =================
     fun renderMenu(c: Canvas, save: SaveManager, sw: Float, sh: Float, buttons: List<UIButton>) {
-        c.drawColor(0xFF8FCF5A.toInt())
-        // 装饰
-        fill.color = 0x33FFFFFF
-        for (d in deco) c.drawCircle(d[0] * (sw / 720f), d[1] * (sw / 720f), d[2] * (sw / 720f), fill)
+        val bg = back2Bitmap
+        if (bg != null) c.drawBitmap(bg, null, RectF(0f, 0f, sw, sh), bitmapPaint)
+        else c.drawColor(0xFF8FCF5A.toInt())
 
         text.textAlign = Paint.Align.CENTER
         text.color = 0xFFFFFFFF.toInt()
         text.textSize = sw * 0.11f
-        c.drawText("动物大逃杀", sw / 2f, sh * 0.22f, text)
+        c.drawText("牛牛大逃杀", sw / 2f, sh * 0.20f, text)
         text.textSize = sw * 0.045f
-        c.drawText("爽快割草 · 无尽生存", sw / 2f, sh * 0.28f, text)
+        c.drawText("爽快割草 · 无尽生存", sw / 2f, sh * 0.26f, text)
         text.color = 0xFFFFE082.toInt()
-        c.drawText("最高分 ${save.highScore} · 金币 ${save.coins}", sw / 2f, sh * 0.33f, text)
+        c.drawText("最高分 ${save.highScore} · 金币 ${save.coins}", sw / 2f, sh * 0.31f, text)
 
         for (b in buttons) {
             fill.color = b.color
@@ -392,16 +411,41 @@ class Renderer(private val ctx: android.content.Context) {
     }
 
     // ================= 养成页 =================
+    private val glowColors = intArrayOf(
+        0xFFFFEB3B.toInt(), 0xFF4FC3F7.toInt(), 0xFF66BB6A.toInt(), 0xFFAB47BC.toInt(), 0xFFEF5350.toInt(),
+    )
+
     fun renderShop(c: Canvas, save: SaveManager, sw: Float, sh: Float, buttons: List<UIButton>) {
-        c.drawColor(0xFF5D4037.toInt())
+        val bg = back3Bitmap
+        if (bg != null) c.drawBitmap(bg, null, RectF(0f, 0f, sw, sh), bitmapPaint)
+        else c.drawColor(0xFF5D4037.toInt())
+
+        // 上方 cowuograde 升级图
+        val cow = cowuogradeBitmap
+        val ch = sh * 0.42f
+        val cw = if (cow != null) ch * (cow.width.toFloat() / cow.height.toFloat()) else 0f
+        val cowL = sw / 2f - cw / 2f
+        val cowT = sh * 0.01f
+        if (cow != null) {
+            c.drawBitmap(cow, null, RectF(cowL, cowT, cowL + cw, cowT + ch), bitmapPaint)
+        }
+        // 升级彩色光芒
+        if (System.currentTimeMillis() < shopGlowUntil && cow != null) {
+            for (k in 0 until 16) {
+                val a = (k * Math.PI * 2 / 16).toFloat() + System.currentTimeMillis() / 300f
+                val gx = sw / 2f + cos(a.toDouble()).toFloat() * cw * 0.55f
+                val gy = cowT + ch / 2f + sin(a.toDouble()).toFloat() * ch * 0.5f
+                fill.color = glowColors[k % glowColors.size]
+                c.drawCircle(gx, gy, 7f + (k % 3) * 3f, fill)
+            }
+        }
+        // 金币
         text.textAlign = Paint.Align.CENTER
         text.color = 0xFFFFD54F.toInt()
-        text.textSize = sw * 0.08f
-        c.drawText("养 成", sw / 2f, sh * 0.08f, text)
-        text.color = 0xFFFFFFFF.toInt()
-        text.textSize = sw * 0.045f
-        c.drawText("金币 ${save.coins}", sw / 2f, sh * 0.13f, text)
+        text.textSize = sw * 0.055f
+        c.drawText("金币 ${save.coins}", sw / 2f, sh * 0.47f, text)
 
+        // 下方属性按钮
         for (b in buttons) {
             fill.color = if (b.enabled) b.color else 0xFF444444.toInt()
             c.drawRoundRect(b.rect, 14f, 14f, fill)
@@ -413,5 +457,55 @@ class Renderer(private val ctx: android.content.Context) {
             text.color = if (b.enabled) 0xFFFFE082.toInt() else 0xFF888888.toInt()
             c.drawText(b.subtext, b.rect.right - sw * 0.04f, b.rect.centerY() + sw * 0.014f, text)
         }
+    }
+
+    var shopGlowUntil: Long = 0L
+
+    // ================= 暂停 / 主页按钮 =================
+    fun renderPauseHome(c: Canvas, pauseBtn: RectF, homeBtn: RectF) {
+        // 暂停按钮（两条竖线图标）
+        fill.color = 0x88000000.toInt()
+        c.drawRoundRect(pauseBtn, 10f, 10f, fill)
+        fill.color = 0xFFFFFFFF.toInt()
+        val cx = pauseBtn.centerX()
+        val cy = pauseBtn.centerY()
+        val bh = pauseBtn.height() * 0.28f
+        val bw = bh * 0.35f
+        c.drawRect(cx - bw * 1.6f, cy - bh, cx - bw * 0.4f, cy + bh, fill)
+        c.drawRect(cx + bw * 0.4f, cy - bh, cx + bw * 1.6f, cy + bh, fill)
+        // 主页按钮
+        fill.color = 0x88000000.toInt()
+        c.drawRoundRect(homeBtn, 10f, 10f, fill)
+        text.color = 0xFFFFFFFF.toInt()
+        text.textSize = homeBtn.height() * 0.42f
+        text.textAlign = Paint.Align.CENTER
+        c.drawText("主页", homeBtn.centerX(), homeBtn.centerY() + text.textSize * 0.35f, text)
+    }
+
+    fun renderPauseOverlay(c: Canvas, sw: Float, sh: Float) {
+        c.drawColor(0x66000000)
+        text.color = 0xFFFFFFFF.toInt()
+        text.textSize = sw * 0.08f
+        text.textAlign = Paint.Align.CENTER
+        c.drawText("已暂停", sw / 2f, sh * 0.40f, text)
+        text.textSize = sw * 0.04f
+        c.drawText("点击暂停键继续", sw / 2f, sh * 0.46f, text)
+    }
+
+    fun renderHomeConfirm(c: Canvas, sw: Float, sh: Float, yes: RectF, no: RectF) {
+        c.drawColor(0x88000000)
+        fill.color = 0xFF37474F.toInt()
+        c.drawRoundRect(RectF(sw * 0.1f, sh * 0.38f, sw * 0.9f, sh * 0.62f), 20f, 20f, fill)
+        text.color = 0xFFFFFFFF.toInt()
+        text.textSize = sw * 0.05f
+        text.textAlign = Paint.Align.CENTER
+        c.drawText("是否返回主页？", sw / 2f, sh * 0.46f, text)
+        fill.color = 0xFF5C9E31.toInt()
+        c.drawRoundRect(yes, 14f, 14f, fill)
+        fill.color = 0xFFE53935.toInt()
+        c.drawRoundRect(no, 14f, 14f, fill)
+        text.color = 0xFFFFFFFF.toInt()
+        c.drawText("是", yes.centerX(), yes.centerY() + text.textSize * 0.35f, text)
+        c.drawText("否", no.centerX(), no.centerY() + text.textSize * 0.35f, text)
     }
 }

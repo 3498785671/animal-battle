@@ -52,28 +52,12 @@ object GameConfig {
         EnemyType.BAT to 210f,
     )
 
-    // ===== 环绕武器五阶（白→绿→蓝→紫→红，随等级自动递进）=====
-    object WeaponTiers {
-        val orbColors = intArrayOf(
-            0xFFEEEEEE.toInt(),  // 白
-            0xFF66BB6A.toInt(),  // 绿
-            0xFF42A5F5.toInt(),  // 蓝
-            0xFFAB47BC.toInt(),  // 紫
-            0xFFEF5350.toInt(),  // 红
-        )
-        val orbNames = arrayOf("white", "green", "blue", "purple", "red")
-
-        fun tierFor(level: Int) = when {
-            level >= 20 -> 4
-            level >= 15 -> 3
-            level >= 10 -> 2
-            level >= 5 -> 1
-            else -> 0
-        }
-        fun count(tier: Int) = 3 + tier
-        fun orbRadius(tier: Int) = (8 + tier * 2).toFloat()
-        fun orbitRadius(level: Int) = (55f + level * 2.5f).coerceAtMost(170f)
-        fun damageMult(tier: Int) = 1f + tier * 0.5f
+    // ===== 旋转大宝剑（主角攻击，废弃五阶变色）=====
+    object SwordConfig {
+        fun count(level: Int) = level.coerceIn(1, 8)        // 初始 1 把，每级 +1，上限 8
+        fun swordLength(playerRadius: Float) = playerRadius * 5f  // 剑长 ≈ 角色高度(直径) × 2.5
+        fun orbitRadius(level: Int) = (50f + level * 2f).coerceAtMost(150f)
+        fun damageMult(level: Int) = 1f + level * 0.15f
     }
 
     // ===== 精英怪散射弹幕 =====
@@ -114,7 +98,7 @@ object GameConfig {
     )
 
     // ===== 主动技能 =====
-    enum class SkillId { FIRE_BLAST, DASH, SUMMON }
+    enum class SkillId { SHIELD, SUMMON_COW, THUNDER }
 
     data class SkillDef(
         val id: SkillId,
@@ -122,12 +106,13 @@ object GameConfig {
         val desc: String,
         val cooldown: Float,
         val color: Int,
+        val icon: String,   // 图标资源名（drawable）
     )
 
     val SKILLS: List<SkillDef> = listOf(
-        SkillDef(SkillId.FIRE_BLAST, "狐火爆裂", "对全屏敌人造成大量伤害", 6f, 0xFFFF7043.toInt()),
-        SkillDef(SkillId.DASH, "疾风冲刺", "向移动方向冲刺，冲刺期间无敌", 3f, 0xFF42A5F5.toInt()),
-        SkillDef(SkillId.SUMMON, "灵狐召唤", "召唤环绕的灵狐自动攻击", 8f, 0xFFFFD54F.toInt()),
+        SkillDef(SkillId.SHIELD, "牛盾", "获得 5 秒无敌护盾", 20f, 0xFF4FC3F7.toInt(), "skill1"),
+        SkillDef(SkillId.SUMMON_COW, "牛召", "召唤小牛辅助战斗", 25f, 0xFFFFD54F.toInt(), "skill2"),
+        SkillDef(SkillId.THUNDER, "牛雷", "全屏雷电秒杀", 30f, 0xFF7E57C2.toInt(), "skillmax"),
     )
 
     // ===== 局外角色 =====
@@ -142,10 +127,7 @@ object GameConfig {
     )
 
     val CHARACTERS: List<CharacterDef> = listOf(
-        CharacterDef("fox", "狐狸", "均衡的全能选手", 0xFFFF9E4A.toInt(), 0, 1.0f, 1.0f),
-        CharacterDef("rabbit", "兔子", "移速 +15%", 0xFFE1BEE7.toInt(), 500, 1.0f, 0.9f),
-        CharacterDef("panda", "熊猫", "生命 +40%", 0xFF424242.toInt(), 1200, 0.9f, 1.4f),
-        CharacterDef("wolf", "灰狼", "攻击 +30%", 0xFF9E9E9E.toInt(), 2500, 1.3f, 0.85f),
+        CharacterDef("cow", "牛", "主角", 0xFF8D6E63.toInt(), 0, 1.0f, 1.0f),
     )
 
     // ===== 局外永久属性 =====

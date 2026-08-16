@@ -16,10 +16,13 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** 召唤的灵狐：环绕玩家旋转并自动射击 */
-class SummonFox {
-    var angle = 0f
+/** 召唤的小牛：跟随玩家环绕游走，发射能量球攻击敌人 */
+class SummonCow {
+    var x = 0f
+    var y = 0f
+    var angle = 0f       // 环绕玩家角度
     var fireTimer = 0f
+    var life = 0f        // 存活时间（秒）
 }
 
 /**
@@ -36,7 +39,7 @@ class GameState {
     val bullets = ArrayList<Bullet>(160)
     val pickups = ArrayList<Pickup>(200)
     val particles = ArrayList<Particle>(600)
-    val summonFoxes = ArrayList<SummonFox>(8)
+    val summonCows = ArrayList<SummonCow>(8)
 
     private lateinit var enemyPool: ObjectPool<Enemy>
     private lateinit var bulletPool: ObjectPool<Bullet>
@@ -104,7 +107,7 @@ class GameState {
         recycleAll(bullets, bulletPool)
         recycleAll(pickups, pickupPool)
         recycleAll(particles, particlePool)
-        summonFoxes.clear()
+        summonCows.clear()
 
         // 初始化玩家
         val p = player
@@ -201,40 +204,54 @@ class GameState {
         if (slowTimer > 0f) slowTimer -= dt
     }
 
-    /** 环绕武器：玩家周围旋转的能量球，碰到敌人造成伤害（替代弹幕普攻） */
+    /** 旋转大宝剑：绕玩家旋转，剑身碰到敌人造成伤害 */
     private fun updateOrbitalWeapon(dt: Float) {
         val p = player
-        val tier = GameConfig.WeaponTiers.tierFor(p.level)
-        val count = GameConfig.WeaponTiers.count(tier)
-        val orbR = GameConfig.WeaponTiers.orbRadius(tier)
-        val orbitR = GameConfig.WeaponTiers.orbitRadius(p.level)
-        val dmgMul = GameConfig.WeaponTiers.damageMult(tier)
-        val baseDmg = p.attack * dmgMul
+        val count = GameConfig.SwordConfig.count(p.level)
+        val swordLen = GameConfig.SwordConfig.swordLength(p.radius)
+        val orbitR = GameConfig.SwordConfig.orbitRadius(p.level)
+        val dmg = p.attack * GameConfig.SwordConfig.damageMult(p.level)
+        val swordWidth = 18f
         orbitalAngle += dt * 2.6f
 
         val step = (Math.PI * 2.0 / count).toFloat()
         for (i in 0 until count) {
             val a = orbitalAngle + i * step
-            val ox = p.x + cos(a.toDouble()).toFloat() * orbitR
-            val oy = p.y + sin(a.toDouble()).toFloat() * orbitR
-            // 碰撞敌人
+            val ca = cos(a.toDouble()).toFloat()
+            val sa = sin(a.toDouble()).toFloat()
+            val ax = p.x + ca * orbitR
+            val ay = p.y + sa * orbitR
+            val bx = p.x + ca * (orbitR + swordLen)
+            val by = p.y + sa * (orbitR + swordLen)
             for (e in enemies) {
                 if (!e.alive || e.weaponHitCooldown > 0f) continue
-                val dx = e.x - ox
-                val dy = e.y - oy
-                val r = e.radius + orbR
-                if (dx * dx + dy * dy <= r * r) {
-                    var dmg = baseDmg
-                    if (p.critChance > 0f && Math.random() < p.critChance) dmg *= p.critMult
-                    e.takeDamage(dmg)
+                val d = distToSegment(e.x, e.y, ax, ay, bx, by)
+                if (d <= e.radius + swordWidth) {
+                    var dmg2 = dmg
+                    if (p.critChance > 0f && Math.random() < p.critChance) dmg2 *= p.critMult
+                    e.takeDamage(dmg2)
                     e.weaponHitCooldown = 0.3f
                     sound?.play(SoundManager.HIT, 0.3f)
-                    // 击中粒子
-                    emit(e.x, e.y, 2, GameConfig.WeaponTiers.orbColors[tier], 80f, 3f, 0.15f)
+                    emit(e.x, e.y, 2, 0xFFFFFFFF.toInt(), 80f, 3f, 0.15f)
                     if (!e.alive) onEnemyDeath(e)
                 }
             }
         }
+    }
+
+    /** 点到线段的最短距离 */
+    private fun distToSegment(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Float {
+        val abx = bx - ax
+        val aby = by - ay
+        val apx = px - ax
+        val apy = py - ay
+        val len2 = abx * abx + aby * aby
+        val t = if (len2 == 0f) 0f else ((apx * abx + apy * aby) / len2).coerceIn(0f, 1f)
+        val cx = ax + t * abx
+        val cy = ay + t * aby
+        val dx = px - cx
+        val dy = py - cy
+        return sqrt(dx * dx + dy * dy)
     }
 
     private fun nearestEnemy(x: Float, y: Float): Enemy? {
@@ -394,24 +411,34 @@ class GameState {
         }
     }
 
-    // ================= 召唤物 =================
+    // ================= 召唤物（小牛） =================
     private fun updateSummons(dt: Float) {
         val p = player
-        for (s in summonFoxes) {
-            s.angle += 1.9f * dt
+        var i = 0
+        while (i < summonCows.size) {
+            val s = summonCows[i]
+            s.life -= dt
+            if (s.life <= 0f) {
+                summonCows.removeAt(i)
+                continue
+            }
+            // 环绕玩家 + 更新位置
+            s.angle += 1.6f * dt
+            s.x = p.x + cos(s.angle) * 60f
+            s.y = p.y + sin(s.angle) * 60f
+            // 发射能量球攻击最近敌人
             s.fireTimer -= dt
             if (s.fireTimer <= 0f) {
-                s.fireTimer = 0.7f
+                s.fireTimer = 0.9f
                 val target = nearestEnemy(p.x, p.y)
                 if (target != null) {
-                    val sx = p.x + cos(s.angle) * 70f
-                    val sy = p.y + sin(s.angle) * 70f
-                    val a = atan2(target.y - sy, target.x - sx)
+                    val a = atan2(target.y - s.y, target.x - s.x)
                     val b = bulletPool.obtain()
-                    b.spawn(sx, sy, cos(a) * 600f, sin(a) * 600f, p.attack * 0.6f, 0)
+                    b.spawn(s.x, s.y, cos(a) * 620f, sin(a) * 620f, p.attack * 0.5f, 0)
                     bullets.add(b)
                 }
             }
+            i++
         }
     }
 
@@ -552,7 +579,7 @@ class GameState {
                 val gained = player.gainExp(pk.value)
                 if (gained > 0) {
                     sound?.play(SoundManager.LEVELUP, 0.6f)
-                    emit(player.x, player.y, 16, GameConfig.WeaponTiers.orbColors[GameConfig.WeaponTiers.tierFor(player.level)], 220f, 5f, 0.6f)
+                    emit(player.x, player.y, 16, 0xFFFFFFFF.toInt(), 220f, 5f, 0.6f)
                     shakeTime = 0.12f
                     shakePower = 4f
                 }
@@ -563,9 +590,9 @@ class GameState {
                 sound?.play(SoundManager.COIN, 0.4f)
             }
             Pickup.Type.HEART -> {
-                player.heal(player.maxHp * 0.2f)
+                player.heal(player.maxHp * 0.1f)
                 sound?.play(SoundManager.HEAL, 0.5f)
-                emit(pk.x, pk.y, 8, 0xFFFF6B6B.toInt(), 80f, 4f, 0.3f)
+                emit(pk.x, pk.y, 8, 0xFFFF5252.toInt(), 80f, 4f, 0.3f)
             }
         }
     }
@@ -602,44 +629,35 @@ class GameState {
         skill.startCooldown(player.cooldownMult)
         sound?.play(SoundManager.SKILL, 0.5f)
         when (skill.def.id) {
-            GameConfig.SkillId.FIRE_BLAST -> {
-                val dmg = player.attack * 8f
+            GameConfig.SkillId.SHIELD -> {
+                // 牛盾：5 秒无敌护盾
+                player.invincibleTimer = 5f
+                emit(player.x, player.y, 30, 0xFF4FC3F7.toInt(), 260f, 6f, 0.8f)
+            }
+            GameConfig.SkillId.SUMMON_COW -> {
+                // 牛召：召唤小牛辅助战斗（持续 20 秒）
+                if (summonCows.size < 3) {
+                    val cow = SummonCow()
+                    cow.angle = (Math.random() * Math.PI * 2).toFloat()
+                    cow.life = 20f
+                    cow.x = player.x
+                    cow.y = player.y
+                    summonCows.add(cow)
+                }
+                emit(player.x, player.y, 24, 0xFFFFD54F.toInt(), 260f, 5f, 0.5f)
+            }
+            GameConfig.SkillId.THUNDER -> {
+                // 牛雷：全屏雷电秒杀（高伤害 AOE）
+                val dmg = player.attack * 20f
                 for (e in enemies) {
                     if (!e.alive) continue
                     e.takeDamage(dmg)
                     if (!e.alive) onEnemyDeath(e)
                 }
-                emit(player.x, player.y, 60, 0xFFFF7043.toInt(), 480f, 7f, 0.7f)
-                shakeTime = 0.4f
-                shakePower = 16f
-            }
-            GameConfig.SkillId.DASH -> {
-                var dx = player.inputX
-                var dy = player.inputY
-                if (dx == 0f && dy == 0f) dy = -1f
-                val len = sqrt(dx * dx + dy * dy)
-                dx /= len; dy /= len
-                dashVx = dx * 1600f
-                dashVy = dy * 1600f
-                dashTimer = 0.18f
-                // 路径伤害
-                for (e in enemies) {
-                    if (!e.alive) continue
-                    val ex = e.x - player.x
-                    val ey = e.y - player.y
-                    val d2 = ex * ex + ey * ey
-                    if (d2 <= 140f * 140f) {
-                        e.takeDamage(player.attack * 2f)
-                        if (!e.alive) onEnemyDeath(e)
-                    }
-                }
-                emit(player.x, player.y, 20, 0xFF42A5F5.toInt(), 300f, 5f, 0.4f)
-            }
-            GameConfig.SkillId.SUMMON -> {
-                if (summonFoxes.size < 4) {
-                    summonFoxes.add(SummonFox().apply { angle = (Math.random() * Math.PI * 2).toFloat() })
-                }
-                emit(player.x, player.y, 24, 0xFFFFD54F.toInt(), 260f, 5f, 0.5f)
+                emit(player.x, player.y, 90, 0xFF7E57C2.toInt(), 640f, 8f, 0.8f)
+                emit(player.x, player.y, 40, 0xFFFFEB3B.toInt(), 520f, 6f, 0.6f)
+                shakeTime = 0.6f
+                shakePower = 24f
             }
         }
         return true

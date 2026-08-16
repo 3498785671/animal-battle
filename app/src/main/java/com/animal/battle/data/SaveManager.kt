@@ -37,12 +37,12 @@ class SaveManager(context: Context) {
 
     // ===== 角色解锁与选择 =====
     fun isUnlocked(charId: String): Boolean =
-        prefs.getBoolean("char_unlock_$charId", charId == "fox")
+        prefs.getBoolean("char_unlock_$charId", charId == "cow")
 
     fun unlock(charId: String) = prefs.edit().putBoolean("char_unlock_$charId", true).apply()
 
     var currentCharacter: String
-        get() = prefs.getString("current_char", "fox") ?: "fox"
+        get() = prefs.getString("current_char", "cow") ?: "cow"
         set(v) = prefs.edit().putString("current_char", v).apply()
 
     // ===== 最高分 =====
