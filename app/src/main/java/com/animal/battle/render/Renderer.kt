@@ -125,11 +125,12 @@ class Renderer(private val ctx: android.content.Context) {
     // ================= 世界渲染（在 scale 内调用） =================
     fun renderWorld(c: Canvas, s: GameState) {
         drawBackground(c, s)
-        drawSwords(c, s)
         for (pk in s.pickups) if (pk.alive) drawPickup(c, pk)
         for (e in s.enemies) if (e.alive) drawEnemy(c, e, s.survivalTime)
         for (f in s.summonCows) drawSummonCow(c, f)
         drawPlayer(c, s.player)
+        // 剑在主角之上绘制（避免主角遮挡剑，看起来剑尖插在牛身上）
+        drawSwords(c, s)
         for (b in s.bullets) if (b.alive) drawBullet(c, b)
         for (p in s.particles) if (p.alive) drawParticle(c, p)
     }
