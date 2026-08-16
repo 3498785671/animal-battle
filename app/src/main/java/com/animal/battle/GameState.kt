@@ -212,7 +212,7 @@ class GameState {
         val orbitR = GameConfig.SwordConfig.orbitRadius(p.level)
         val dmg = p.attack * GameConfig.SwordConfig.damageMult(p.level)
         val swordWidth = 18f
-        orbitalAngle += dt * 2.6f
+        orbitalAngle += dt * GameConfig.SwordConfig.rotationSpeed(p.level)
 
         val step = (Math.PI * 2.0 / count).toFloat()
         for (i in 0 until count) {
@@ -529,8 +529,9 @@ class GameState {
         }
         // 金币
         if (e.coin > 0 && Math.random() < 0.6) spawnPickup(Pickup.Type.COIN, e.x, e.y, e.coin)
-        // 血包
-        if (Math.random() < 0.025) spawnPickup(Pickup.Type.HEART, e.x, e.y, 1)
+        // 血包：5% 起，随时间递增到 12%，改善后期生存
+        val heartChance = (0.05f + (survivalTime / 600f) * 0.07f).coerceAtMost(0.12f)
+        if (Math.random() < heartChance) spawnPickup(Pickup.Type.HEART, e.x, e.y, 1)
         // 爆炸粒子
         val count = if (e.type == GameConfig.EnemyType.BOSS) 40 else if (e.type == GameConfig.EnemyType.ELITE) 24 else 12
         emit(e.x, e.y, count, e.type.color, 200f, 5f, 0.5f)

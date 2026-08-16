@@ -143,7 +143,7 @@ class Renderer(private val ctx: android.content.Context) {
     /** 绘制旋转大宝剑 */
     private val swordDstRect = RectF()
 
-    /** 旋转大宝剑：整张「牛头+剑」图（已抠白底），剑尖朝外尖刺式 + 剑尖白光 */
+    /** 旋转大宝剑：剑从主角中心向外辐射，剑尖朝外，无残留特效 */
     private fun drawSwords(c: Canvas, s: GameState) {
         val p = s.player
         val bmp = armsBitmap ?: return
@@ -157,25 +157,18 @@ class Renderer(private val ctx: android.content.Context) {
             val a = baseAngle + i * step
             val cosA = cos(a.toDouble()).toFloat()
             val sinA = sin(a.toDouble()).toFloat()
-            // 剑中点（剑柄在玩家边缘、剑尖在外围）
+            // 剑中点（剑柄在玩家中心、剑尖在外围）
             val mx = p.x + cosA * (orbitR + swordLen / 2f)
             val my = p.y + sinA * (orbitR + swordLen / 2f)
-            // 剑尖位置（外围）
-            val tipX = p.x + cosA * (orbitR + swordLen)
-            val tipY = p.y + sinA * (orbitR + swordLen)
 
             c.save()
             c.translate(mx, my)
-            // arms.png 已处理成剑尖竖直朝上（-90°），+90° 让剑尖指向 a 方向（外侧）
+            // arms.png 剑尖竖直朝上，+90° 让剑尖始终指向 a 方向（外侧）
             c.rotate((a * 180 / Math.PI).toFloat() + 90f)
             val size = swordLen * 0.95f
             swordDstRect.set(-size / 2f, -size / 2f, size / 2f, size / 2f)
             c.drawBitmap(bmp, null, swordDstRect, bitmapPaint)
             c.restore()
-
-            // 剑尖白光
-            fill.color = 0xCCFFFFFF.toInt()
-            c.drawCircle(tipX, tipY, 5f, fill)
         }
     }
 
@@ -506,51 +499,36 @@ class Renderer(private val ctx: android.content.Context) {
 
     var shopGlowUntil: Long = 0L
 
-    // ================= 暂停 / 主页按钮 =================
-    fun renderPauseHome(c: Canvas, pauseBtn: RectF, homeBtn: RectF) {
-        // 暂停按钮（两条竖线图标）
+    // ================= 合并按钮 / 游戏菜单 =================
+    fun renderMenuBtn(c: Canvas, btn: RectF) {
+        // 右上角合并按钮（⏸ 两条竖线）
         fill.color = 0x88000000.toInt()
-        c.drawRoundRect(pauseBtn, 10f, 10f, fill)
+        c.drawRoundRect(btn, 8f, 8f, fill)
         fill.color = 0xFFFFFFFF.toInt()
-        val cx = pauseBtn.centerX()
-        val cy = pauseBtn.centerY()
-        val bh = pauseBtn.height() * 0.28f
-        val bw = bh * 0.35f
-        c.drawRect(cx - bw * 1.6f, cy - bh, cx - bw * 0.4f, cy + bh, fill)
-        c.drawRect(cx + bw * 0.4f, cy - bh, cx + bw * 1.6f, cy + bh, fill)
-        // 主页按钮
-        fill.color = 0x88000000.toInt()
-        c.drawRoundRect(homeBtn, 10f, 10f, fill)
-        text.color = 0xFFFFFFFF.toInt()
-        text.textSize = homeBtn.height() * 0.42f
-        text.textAlign = Paint.Align.CENTER
-        c.drawText("主页", homeBtn.centerX(), homeBtn.centerY() + text.textSize * 0.35f, text)
+        val cx = btn.centerX()
+        val cy = btn.centerY()
+        val bh = btn.height() * 0.26f
+        val bw = bh * 0.38f
+        c.drawRect(cx - bw * 1.5f, cy - bh, cx - bw * 0.5f, cy + bh, fill)
+        c.drawRect(cx + bw * 0.5f, cy - bh, cx + bw * 1.5f, cy + bh, fill)
     }
 
-    fun renderPauseOverlay(c: Canvas, sw: Float, sh: Float) {
-        c.drawColor(0x66000000)
-        text.color = 0xFFFFFFFF.toInt()
-        text.textSize = sw * 0.08f
-        text.textAlign = Paint.Align.CENTER
-        c.drawText("已暂停", sw / 2f, sh * 0.40f, text)
-        text.textSize = sw * 0.04f
-        c.drawText("点击暂停键继续", sw / 2f, sh * 0.46f, text)
-    }
-
-    fun renderHomeConfirm(c: Canvas, sw: Float, sh: Float, yes: RectF, no: RectF) {
+    fun renderGameMenu(c: Canvas, sw: Float, sh: Float, contBtn: RectF, homeBtn: RectF) {
         c.drawColor(0x88000000)
         fill.color = 0xFF37474F.toInt()
-        c.drawRoundRect(RectF(sw * 0.1f, sh * 0.38f, sw * 0.9f, sh * 0.62f), 20f, 20f, fill)
+        c.drawRoundRect(RectF(sw * 0.12f, sh * 0.38f, sw * 0.88f, sh * 0.70f), 20f, 20f, fill)
         text.color = 0xFFFFFFFF.toInt()
-        text.textSize = sw * 0.05f
+        text.textSize = sw * 0.055f
         text.textAlign = Paint.Align.CENTER
-        c.drawText("是否返回主页？", sw / 2f, sh * 0.46f, text)
+        c.drawText("游戏暂停", sw / 2f, sh * 0.44f, text)
+        // 继续游戏
         fill.color = 0xFF5C9E31.toInt()
-        c.drawRoundRect(yes, 14f, 14f, fill)
-        fill.color = 0xFFE53935.toInt()
-        c.drawRoundRect(no, 14f, 14f, fill)
-        text.color = 0xFFFFFFFF.toInt()
-        c.drawText("是", yes.centerX(), yes.centerY() + text.textSize * 0.35f, text)
-        c.drawText("否", no.centerX(), no.centerY() + text.textSize * 0.35f, text)
+        c.drawRoundRect(contBtn, 14f, 14f, fill)
+        text.textSize = sw * 0.045f
+        c.drawText("继续游戏", contBtn.centerX(), contBtn.centerY() + text.textSize * 0.35f, text)
+        // 回到主页
+        fill.color = 0xFF7E57C2.toInt()
+        c.drawRoundRect(homeBtn, 14f, 14f, fill)
+        c.drawText("回到主页", homeBtn.centerX(), homeBtn.centerY() + text.textSize * 0.35f, text)
     }
 }

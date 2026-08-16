@@ -52,17 +52,32 @@ object GameConfig {
         EnemyType.BAT to 210f,
     )
 
-    // ===== 旋转大宝剑（主角攻击，废弃五阶变色）=====
+    // ===== 旋转大宝剑（主角攻击）=====
     object SwordConfig {
-        fun count(level: Int) = level.coerceIn(1, 8)        // 初始 1 把，每级 +1，上限 8
-        // 剑长：基础 ≈ 角色高度(直径) × 2.5；8 级后每级继续增大剑身，扩大攻击范围
+        fun count(level: Int) = level.coerceIn(1, 12)        // 初始 1 把，每级 +1，上限 12
+
+        // 剑长（面积）：基础 ≈ 角色高度(直径) × 2.5；12 级后每级 +8% 面积（剑长按 4% 增长近似）
         fun swordLength(playerRadius: Float, level: Int): Float {
             val base = playerRadius * 5f
-            val extra = if (level > 8) (level - 8) * 7f else 0f
-            return (base + extra).coerceAtMost(340f)
+            val extra = if (level > 12) base * (Math.pow(1.04, (level - 12).toDouble()) - 1).toFloat() else 0f
+            return (base + extra).coerceAtMost(420f)
         }
-        fun orbitRadius(level: Int) = (50f + level * 2f).coerceAtMost(160f)
-        fun damageMult(level: Int) = 1f + level * 0.15f
+
+        // 剑从主角中心向外辐射（orbitRadius=0），修复贴身穿刺打不到的问题
+        fun orbitRadius(level: Int) = 0f
+
+        // 伤害：基础每级 +15%；8 级后额外每级 +10%
+        fun damageMult(level: Int): Float {
+            var m = 1f + level * 0.15f
+            if (level > 8) m *= 1f + (level - 8) * 0.10f
+            return m
+        }
+
+        // 旋转速度（弧度/秒）：基础 2.6；8 级后每级 +5%
+        fun rotationSpeed(level: Int): Float {
+            val base = 2.6f
+            return if (level > 8) base * (1f + (level - 8) * 0.05f) else base
+        }
     }
 
     // ===== 精英怪散射弹幕 =====

@@ -43,16 +43,15 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     private val menuButtons = ArrayList<UIButton>()
     private val shopButtons = ArrayList<UIButton>()
     private val gameOverButtons = ArrayList<UIButton>()
-    private val pauseBtn = RectF()
-    private val homeBtn = RectF()
-    private val confirmYesBtn = RectF()
-    private val confirmNoBtn = RectF()
+    private val menuBtn = RectF()          // 右上角合并按钮（暂停/菜单）
+    private val menuContinueBtn = RectF()  // 继续游戏
+    private val menuHomeBtn = RectF()      // 回到主页
 
     // 状态
     @Volatile
     private var paused = false
     @Volatile
-    private var homeConfirmActive = false
+    private var menuActive = false
 
     // 线程
     @Volatile
@@ -144,12 +143,10 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                     renderer.renderHUD(canvas, state, screenW, screenH, scale)
                     renderer.renderJoystick(canvas, joystick)
                     renderer.renderSkillButtons(canvas, state, skillButtons)
-                    if (mode == GameMode.PLAYING) renderer.renderPauseHome(canvas, pauseBtn, homeBtn)
+                    if (mode == GameMode.PLAYING) renderer.renderMenuBtn(canvas, menuBtn)
 
-                    if (homeConfirmActive) {
-                        renderer.renderHomeConfirm(canvas, screenW, screenH, confirmYesBtn, confirmNoBtn)
-                    } else if (paused && mode == GameMode.PLAYING) {
-                        renderer.renderPauseOverlay(canvas, screenW, screenH)
+                    if (menuActive) {
+                        renderer.renderGameMenu(canvas, screenW, screenH, menuContinueBtn, menuHomeBtn)
                     }
 
                     if (mode == GameMode.GAME_OVER) {
@@ -202,23 +199,25 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 val id = event.getPointerId(idx)
                 val x = event.getX(idx)
                 val y = event.getY(idx)
-                // 主页确认弹层
-                if (homeConfirmActive) {
-                    if (confirmYesBtn.contains(x, y)) { backToMenu(); return }
-                    if (confirmNoBtn.contains(x, y)) { homeConfirmActive = false; return }
+                // 菜单弹层
+                if (menuActive) {
+                    if (menuContinueBtn.contains(x, y)) {
+                        menuActive = false
+                        paused = false
+                        resumeBgm()
+                        return
+                    }
+                    if (menuHomeBtn.contains(x, y)) {
+                        backToMenu()   // 结算金币 + 回主页
+                        return
+                    }
                     return
                 }
-                // 暂停键
-                if (pauseBtn.contains(x, y)) {
-                    paused = !paused
-                    if (paused) pauseBgm() else resumeBgm()
-                    return
-                }
-                // 主页键（弹确认）
-                if (homeBtn.contains(x, y)) {
+                // 合并按钮（暂停 + 弹菜单）
+                if (menuBtn.contains(x, y)) {
                     paused = true
                     pauseBgm()
-                    homeConfirmActive = true
+                    menuActive = true
                     return
                 }
                 if (paused) return
@@ -269,12 +268,11 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         gameOverButtons.add(UIButton("retry", RectF(w * 0.2f, h * 0.60f, w * 0.8f, h * 0.68f), "再来一局", "", true, 0xFF5C9E31.toInt()))
         gameOverButtons.add(UIButton("menu", RectF(w * 0.2f, h * 0.72f, w * 0.8f, h * 0.80f), "返回菜单", "", true, 0xFF7E57C2.toInt()))
 
-        // 暂停 / 主页键（右上角，计时下方）
-        pauseBtn.set(w - w * 0.16f, h * 0.10f, w - w * 0.02f, h * 0.17f)
-        homeBtn.set(w - w * 0.16f, h * 0.19f, w - w * 0.02f, h * 0.26f)
-        // 主页确认弹层按钮
-        confirmYesBtn.set(w * 0.22f, h * 0.50f, w * 0.48f, h * 0.58f)
-        confirmNoBtn.set(w * 0.52f, h * 0.50f, w * 0.78f, h * 0.58f)
+        // 合并按钮（右上角，缩小 UI）
+        menuBtn.set(w - w * 0.12f, h * 0.06f, w - w * 0.03f, h * 0.12f)
+        // 菜单弹层按钮（继续游戏 / 回到主页）
+        menuContinueBtn.set(w * 0.22f, h * 0.46f, w * 0.78f, h * 0.54f)
+        menuHomeBtn.set(w * 0.22f, h * 0.56f, w * 0.78f, h * 0.64f)
     }
 
     private fun buildShopButtons() {
@@ -330,8 +328,10 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     }
 
     private fun backToMenu() {
+        // 结算本次游戏已获得的金币
+        if (state.coinsEarned > 0) save.addCoins(state.coinsEarned)
         paused = false
-        homeConfirmActive = false
+        menuActive = false
         stopBgm()
         mode = GameMode.MENU
     }
@@ -340,7 +340,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         val char = GameConfig.CHARACTERS.firstOrNull { it.id == save.currentCharacter } ?: GameConfig.CHARACTERS[0]
         state.character = char
         paused = false
-        homeConfirmActive = false
+        menuActive = false
         state.permAtk = save.permLevel(GameConfig.PermUpgradeId.ATK) * 0.10f
         state.permHp = save.permLevel(GameConfig.PermUpgradeId.HP) * 0.10f
         state.permSpeed = save.permLevel(GameConfig.PermUpgradeId.SPEED) * 0.04f
