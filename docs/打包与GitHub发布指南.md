@@ -108,7 +108,7 @@ git commit -m "feat: 动物大逃杀 单机割草游戏 v1.0.0"
 ### 4.3 关联并推送（网页方式）
 ```bash
 git branch -M main
-git remote add origin https://github.com/你的用户名/animal-battle.git
+git remote add origin https://github.com/3498785671/animal-battle.git
 git push -u origin main
 ```
 
@@ -124,9 +124,8 @@ git push -u origin main
 
 仓库根目录的 `README.md` 已包含：项目简介、特性列表、玩法说明、下载链接、构建步骤、目录结构。
 发布前只需：
-1. 替换 `下载链接` 中的「你的用户名」。
-2. 补上第 3 步生成的三张截图。
-3. 按需修改 License 与仓库描述。
+1. 补上第 3 步生成的三张截图（`docs/screenshots/` 下）。
+2. 按需修改 License 与仓库描述。
 
 ---
 

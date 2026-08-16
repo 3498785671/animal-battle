@@ -30,7 +30,7 @@
 
 ## 📥 下载
 
-- **最新 APK**：前往 [Releases](https://github.com/你的用户名/animal-battle/releases) 下载 `animal-battle-v1.0.0.apk`
+- **最新 APK**：前往 [Releases](https://github.com/3498785671/animal-battle/releases) 下载 `动物大逃杀-v1.1.0-release.apk`
 - 或自行构建：见下方「构建」章节。
 
 ## 🔧 构建
