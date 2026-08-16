@@ -158,15 +158,19 @@ class Renderer(private val ctx: android.content.Context) {
             val a = baseAngle + i * step
             val cosA = cos(a.toDouble()).toFloat()
             val sinA = sin(a.toDouble()).toFloat()
-            // 剑中点（剑柄在玩家中心、剑尖在外围）
-            val mx = p.x + cosA * (orbitR + swordLen / 2f)
-            val my = p.y + sinA * (orbitR + swordLen / 2f)
+            // 剑尖精确在外侧（p + 方向*swordLen），剑柄在主角中心
+            val tipX = p.x + cosA * swordLen
+            val tipY = p.y + sinA * swordLen
+            // 画图中心 = 剑身中点 = (柄 + 尖)/2
+            val mx = (p.x + tipX) / 2f
+            val my = (p.y + tipY) / 2f
 
             c.save()
             c.translate(mx, my)
-            // arms.png 剑尖竖直朝上，+90° 让剑尖始终指向 a 方向（外侧）
+            // arms.png 剑尖朝上，rotate +90° 让剑尖始终指向 a 方向（外侧）
             c.rotate((a * 180 / Math.PI).toFloat() + 90f)
-            val size = swordLen * 0.95f
+            // arms.png 剑身长 347/384≈0.904，size = swordLen/0.904 让剑身 ≈ swordLen
+            val size = swordLen / 0.904f
             swordDstRect.set(-size / 2f, -size / 2f, size / 2f, size / 2f)
             c.drawBitmap(bmp, null, swordDstRect, bitmapPaint)
             c.restore()
