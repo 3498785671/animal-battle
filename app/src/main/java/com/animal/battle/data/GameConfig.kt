@@ -31,14 +31,14 @@ object GameConfig {
         val color: Int,
         val coin: Int,
     ) {
-        WOLF(30f, 130f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
-        BEAR(140f, 64f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
-        BOAR(60f, 170f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),     // 野猪：冲锋
-        SNAKE(45f, 94f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),     // 蛇：远程减速
-        ELITE(400f, 90f, 25f, 45f, 15, 0xFFB71C1C.toInt(), 8),   // 精英：体型更大
-        HEDGEHOG(60f, 71f, 22f, 18f, 3, 0xFF546E7A.toInt(), 2),  // 刺猬：慢、高伤
-        BAT(26f, 176f, 6f, 13f, 2, 0xFF7E57C2.toInt(), 2),       // 蝙蝠：快、脆
-        BOSS(1600f, 68f, 35f, 60f, 80, 0xFF7B1FA2.toInt(), 40),  // Boss
+        WOLF(30f, 65f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
+        BEAR(140f, 32f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
+        BOAR(60f, 85f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),      // 野猪：冲锋
+        SNAKE(45f, 47f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),     // 蛇：远程减速
+        ELITE(400f, 45f, 25f, 45f, 15, 0xFFB71C1C.toInt(), 8),   // 精英：体型更大
+        HEDGEHOG(60f, 35f, 22f, 18f, 3, 0xFF546E7A.toInt(), 2),  // 刺猬：慢、高伤
+        BAT(26f, 88f, 6f, 13f, 2, 0xFF7E57C2.toInt(), 2),        // 蝙蝠：快、脆
+        BOSS(1600f, 34f, 35f, 60f, 80, 0xFF7B1FA2.toInt(), 40),  // Boss
     }
 
     // 各敌人出现所需的生存秒数（解锁时间）
@@ -70,7 +70,7 @@ object GameConfig {
             level >= 5 -> 1
             else -> 0
         }
-        fun count(tier: Int) = 2 + tier
+        fun count(tier: Int) = 3 + tier
         fun orbRadius(tier: Int) = (8 + tier * 2).toFloat()
         fun orbitRadius(level: Int) = (55f + level * 2.5f).coerceAtMost(170f)
         fun damageMult(tier: Int) = 1f + tier * 0.5f
@@ -125,9 +125,9 @@ object GameConfig {
     )
 
     val SKILLS: List<SkillDef> = listOf(
-        SkillDef(SkillId.FIRE_BLAST, "狐火爆裂", "对全屏敌人造成大量伤害", 12f, 0xFFFF7043.toInt()),
-        SkillDef(SkillId.DASH, "疾风冲刺", "向移动方向冲刺，冲刺期间无敌", 6f, 0xFF42A5F5.toInt()),
-        SkillDef(SkillId.SUMMON, "灵狐召唤", "召唤环绕的灵狐自动攻击", 16f, 0xFFFFD54F.toInt()),
+        SkillDef(SkillId.FIRE_BLAST, "狐火爆裂", "对全屏敌人造成大量伤害", 6f, 0xFFFF7043.toInt()),
+        SkillDef(SkillId.DASH, "疾风冲刺", "向移动方向冲刺，冲刺期间无敌", 3f, 0xFF42A5F5.toInt()),
+        SkillDef(SkillId.SUMMON, "灵狐召唤", "召唤环绕的灵狐自动攻击", 8f, 0xFFFFD54F.toInt()),
     )
 
     // ===== 局外角色 =====

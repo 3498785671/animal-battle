@@ -50,6 +50,7 @@ class Renderer(private val ctx: android.content.Context) {
     private var orbBlue: Bitmap? = null
     private var orbPurple: Bitmap? = null
     private var orbRed: Bitmap? = null
+    private var bgBitmap: Bitmap? = null
 
     // 背景装饰点
     private val deco = ArrayList<FloatArray>(40)
@@ -63,29 +64,35 @@ class Renderer(private val ctx: android.content.Context) {
     }
 
     private fun loadBitmaps() {
-        fun loadFrames(prefix: String, frames: Array<Bitmap?>): Array<Bitmap?> {
-            val res = ctx.resources
-            return arrayOf(
-                BitmapFactory.decodeResource(res, res.getIdentifier("${prefix}_0", "drawable", ctx.packageName)),
-                BitmapFactory.decodeResource(res, res.getIdentifier("${prefix}_1", "drawable", ctx.packageName)),
-            )
-        }
-        System.arraycopy(loadFrames("fox", foxFrames), 0, foxFrames, 0, 2)
-        System.arraycopy(loadFrames("wolf", wolfFrames), 0, wolfFrames, 0, 2)
-        System.arraycopy(loadFrames("bear", bearFrames), 0, bearFrames, 0, 2)
-        System.arraycopy(loadFrames("boar", boarFrames), 0, boarFrames, 0, 2)
-        System.arraycopy(loadFrames("snake", snakeFrames), 0, snakeFrames, 0, 2)
-        System.arraycopy(loadFrames("hedgehog", hedgehogFrames), 0, hedgehogFrames, 0, 2)
-        System.arraycopy(loadFrames("bat", batFrames), 0, batFrames, 0, 2)
-        System.arraycopy(loadFrames("elite", eliteFrames), 0, eliteFrames, 0, 2)
-        System.arraycopy(loadFrames("boss", bossFrames), 0, bossFrames, 0, 2)
         val res = ctx.resources
-        expBitmap = BitmapFactory.decodeResource(res, R.drawable.exp)
-        orbWhite = BitmapFactory.decodeResource(res, R.drawable.orb_white)
-        orbGreen = BitmapFactory.decodeResource(res, R.drawable.orb_green)
-        orbBlue = BitmapFactory.decodeResource(res, R.drawable.orb_blue)
-        orbPurple = BitmapFactory.decodeResource(res, R.drawable.orb_purple)
-        orbRed = BitmapFactory.decodeResource(res, R.drawable.orb_red)
+        fun load(name: String): Bitmap? =
+            BitmapFactory.decodeResource(res, res.getIdentifier(name, "drawable", ctx.packageName))
+
+        // 主角：cow
+        val cow = load("cow")
+        foxFrames[0] = cow
+        foxFrames[1] = cow
+        // 怪物：rabbit / lion / panda / elephant
+        val rabbit = load("rabbit")
+        val lion = load("lion")
+        val panda = load("panda")
+        val elephant = load("elephant")
+        wolfFrames[0] = rabbit; wolfFrames[1] = rabbit      // 狼 → 兔子
+        bearFrames[0] = lion; bearFrames[1] = lion          // 熊 → 狮子
+        boarFrames[0] = panda; boarFrames[1] = panda        // 野猪 → 熊猫
+        snakeFrames[0] = elephant; snakeFrames[1] = elephant // 蛇 → 大象
+        hedgehogFrames[0] = panda; hedgehogFrames[1] = panda // 刺猬 → 熊猫
+        batFrames[0] = rabbit; batFrames[1] = rabbit         // 蝙蝠 → 兔子
+        eliteFrames[0] = lion; eliteFrames[1] = lion         // 精英 → 狮子
+        bossFrames[0] = elephant; bossFrames[1] = elephant   // Boss → 大象
+
+        expBitmap = load("exp")
+        orbWhite = load("orb_white")
+        orbGreen = load("orb_green")
+        orbBlue = load("orb_blue")
+        orbPurple = load("orb_purple")
+        orbRed = load("orb_red")
+        bgBitmap = load("back")
     }
 
     private fun framesForType(type: GameConfig.EnemyType): Array<Bitmap?> = when (type) {
@@ -144,24 +151,16 @@ class Renderer(private val ctx: android.content.Context) {
     }
 
     private fun drawBackground(c: Canvas, s: GameState) {
-        c.drawColor(0xFF8FCF5A.toInt())
-        // 网格
-        stroke.color = 0x33FFFFFF
-        stroke.strokeWidth = 2f
-        val step = 90f
-        var x = step
-        while (x < s.worldW) { c.drawLine(x, 0f, x, s.worldH, stroke); x += step }
-        var y = step
-        while (y < s.worldH) { c.drawLine(0f, y, s.worldW, y, stroke); y += step }
-        // 装饰点
-        for (d in deco) {
-            if (d[1] > s.worldH) continue
-            fill.color = 0x33FFFFFF
-            c.drawCircle(d[0], d[1], d[2], fill)
+        val bmp = bgBitmap
+        if (bmp != null) {
+            // 草原场景背景，拉伸铺满世界
+            c.drawBitmap(bmp, null, RectF(0f, 0f, s.worldW, s.worldH), bitmapPaint)
+        } else {
+            c.drawColor(0xFF8FCF5A.toInt())
         }
         // 边界墙
-        stroke.color = 0xFF2E7D32.toInt()
-        stroke.strokeWidth = 16f
+        stroke.color = 0x552E7D32.toInt()
+        stroke.strokeWidth = 12f
         c.drawRect(0f, 0f, s.worldW, s.worldH, stroke)
     }
 
