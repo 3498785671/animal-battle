@@ -3,6 +3,7 @@ package com.animal.battle
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.RectF
+import android.media.MediaPlayer
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -19,10 +20,11 @@ import com.animal.battle.ui.UIButton
  */
 class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
 
-    private val renderer = Renderer()
+    private val renderer = Renderer(context)
     val save = SaveManager(context)
     private val state = GameState()
     private val sound = SoundManager(context)
+    private var bgm: MediaPlayer? = null
 
     @Volatile
     private var mode = GameMode.MENU
@@ -40,7 +42,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     private val skillButtons = ArrayList<UIButton>()
     private val menuButtons = ArrayList<UIButton>()
     private val shopButtons = ArrayList<UIButton>()
-    private val upgradeButtons = ArrayList<UIButton>()
     private val gameOverButtons = ArrayList<UIButton>()
 
     // 线程
@@ -89,7 +90,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 last = now
                 acc += frame
                 while (acc >= fixedDt) {
-                    if (mode == GameMode.PLAYING && !state.upgradeActive && !state.player.isDead) {
+                    if (mode == GameMode.PLAYING && !state.player.isDead) {
                         synchronized(state) {
                             state.player.inputX = joystick.inputX
                             state.player.inputY = joystick.inputY
@@ -128,10 +129,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                     renderer.renderJoystick(canvas, joystick)
                     renderer.renderSkillButtons(canvas, state, skillButtons)
 
-                    if (state.upgradeActive) {
-                        if (upgradeButtons.isEmpty()) buildUpgradeButtons()
-                        renderer.renderUpgradeOverlay(canvas, state, screenW, screenH, upgradeButtons)
-                    }
                     if (mode == GameMode.GAME_OVER) {
                         renderer.renderGameOver(canvas, state, save, screenW, screenH, gameOverButtons)
                     }
@@ -176,10 +173,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
     }
 
     private fun handlePlayingTouch(event: MotionEvent) {
-        if (state.upgradeActive) {
-            handleTapButtons(event, upgradeButtons) { onChooseUpgrade(it) }
-            return
-        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val idx = event.actionIndex
@@ -258,18 +251,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         }
     }
 
-    private fun buildUpgradeButtons() {
-        upgradeButtons.clear()
-        val w = screenW
-        val h = screenH
-        var y = h * 0.28f
-        val itemH = h * 0.13f
-        for ((i, def) in state.upgradeChoices.withIndex()) {
-            upgradeButtons.add(UIButton("up_$i", RectF(w * 0.1f, y, w * 0.9f, y + itemH), def.name, def.desc, true, 0xFF3E2723.toInt()))
-            y += itemH + h * 0.025f
-        }
-    }
-
     // ================= 状态动作 =================
     private fun onMenuAction(id: String) {
         when (id) {
@@ -309,14 +290,6 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         }
     }
 
-    private fun onChooseUpgrade(id: String) {
-        val idx = id.removePrefix("up_").toIntOrNull() ?: return
-        synchronized(state) {
-            if (idx < state.upgradeChoices.size) state.chooseUpgrade(state.upgradeChoices[idx])
-        }
-        upgradeButtons.clear()
-    }
-
     private fun onGameOverAction(id: String) {
         when (id) {
             "retry" -> startGame()
@@ -333,8 +306,25 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         state.permExp = save.permLevel(GameConfig.PermUpgradeId.EXP) * 0.10f
         state.permCoin = save.permLevel(GameConfig.PermUpgradeId.COIN) * 0.10f
         state.reset(GameConfig.WORLD_W, worldH)
-        upgradeButtons.clear()
+        startBgm()
         mode = GameMode.PLAYING
+    }
+
+    private fun startBgm() {
+        if (bgm != null) return
+        bgm = MediaPlayer.create(context, com.animal.battle.R.raw.bgm)?.apply {
+            isLooping = true
+            setVolume(0.35f, 0.35f)
+            start()
+        }
+    }
+
+    private fun stopBgm() {
+        bgm?.let {
+            try { it.stop() } catch (_: Exception) {}
+            it.release()
+        }
+        bgm = null
     }
 
     private fun onGameOver() {
@@ -343,6 +333,7 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
         save.bestTime = maxOf(save.bestTime, state.survivalTime)
         save.addCoins(state.coinsEarned)
         sound.play(SoundManager.GAMEOVER, 0.6f)
+        stopBgm()
         mode = GameMode.GAME_OVER
     }
 }

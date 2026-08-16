@@ -14,16 +14,24 @@ class Bullet {
     var friendly = true // 目前全部为友方子弹
     var life = 3f       // 最大存活时间
 
-    fun spawn(x: Float, y: Float, vx: Float, vy: Float, damage: Float, pierce: Int = 0) {
+    fun spawn(
+        x: Float, y: Float, vx: Float, vy: Float,
+        damage: Float, pierce: Int = 0,
+        friendly: Boolean = true,
+        color: Int = 0xFFFFD54F.toInt(),
+        radius: Float = 6f,
+        life: Float = 3f,
+    ) {
         this.x = x
         this.y = y
         this.vx = vx
         this.vy = vy
         this.damage = damage
         this.pierce = pierce
-        this.radius = 6f
-        this.color = 0xFFFFD54F.toInt()
+        this.radius = radius
+        this.color = color
+        this.friendly = friendly
         this.alive = true
-        this.life = 3f
+        this.life = life
     }
 }

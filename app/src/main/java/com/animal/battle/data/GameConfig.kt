@@ -31,14 +31,14 @@ object GameConfig {
         val color: Int,
         val coin: Int,
     ) {
-        WOLF(30f, 175f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
-        BEAR(140f, 85f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
-        BOAR(60f, 225f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),     // 野猪：冲锋
-        SNAKE(45f, 125f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),    // 蛇：远程减速
-        ELITE(400f, 120f, 25f, 40f, 15, 0xFFB71C1C.toInt(), 8),  // 精英
-        HEDGEHOG(60f, 95f, 22f, 18f, 3, 0xFF546E7A.toInt(), 2),  // 刺猬：慢、高伤
-        BAT(26f, 235f, 6f, 13f, 2, 0xFF7E57C2.toInt(), 2),       // 蝙蝠：快、脆
-        BOSS(1600f, 90f, 35f, 60f, 80, 0xFF7B1FA2.toInt(), 40),  // Boss
+        WOLF(30f, 130f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
+        BEAR(140f, 64f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
+        BOAR(60f, 170f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),     // 野猪：冲锋
+        SNAKE(45f, 94f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),     // 蛇：远程减速
+        ELITE(400f, 90f, 25f, 45f, 15, 0xFFB71C1C.toInt(), 8),   // 精英：体型更大
+        HEDGEHOG(60f, 71f, 22f, 18f, 3, 0xFF546E7A.toInt(), 2),  // 刺猬：慢、高伤
+        BAT(26f, 176f, 6f, 13f, 2, 0xFF7E57C2.toInt(), 2),       // 蝙蝠：快、脆
+        BOSS(1600f, 68f, 35f, 60f, 80, 0xFF7B1FA2.toInt(), 40),  // Boss
     }
 
     // 各敌人出现所需的生存秒数（解锁时间）
@@ -51,6 +51,40 @@ object GameConfig {
         EnemyType.ELITE to 180f,
         EnemyType.BAT to 210f,
     )
+
+    // ===== 环绕武器五阶（白→绿→蓝→紫→红，随等级自动递进）=====
+    object WeaponTiers {
+        val orbColors = intArrayOf(
+            0xFFEEEEEE.toInt(),  // 白
+            0xFF66BB6A.toInt(),  // 绿
+            0xFF42A5F5.toInt(),  // 蓝
+            0xFFAB47BC.toInt(),  // 紫
+            0xFFEF5350.toInt(),  // 红
+        )
+        val orbNames = arrayOf("white", "green", "blue", "purple", "red")
+
+        fun tierFor(level: Int) = when {
+            level >= 20 -> 4
+            level >= 15 -> 3
+            level >= 10 -> 2
+            level >= 5 -> 1
+            else -> 0
+        }
+        fun count(tier: Int) = 2 + tier
+        fun orbRadius(tier: Int) = (8 + tier * 2).toFloat()
+        fun orbitRadius(level: Int) = (55f + level * 2.5f).coerceAtMost(170f)
+        fun damageMult(tier: Int) = 1f + tier * 0.5f
+    }
+
+    // ===== 精英怪散射弹幕 =====
+    object EliteConfig {
+        const val SPAWN_INTERVAL_SEC = 120f  // 每 120 秒生成一只
+        const val FIRE_INTERVAL = 2.0f        // 散射冷却（秒）
+        const val FAN_COUNT = 4
+        const val BULLET_SPEED = 280f
+        const val BULLET_DAMAGE_MUL = 0.6f
+        const val BULLET_RADIUS = 5f
+    }
 
     // ===== 经验曲线 =====
     fun expToNextLevel(level: Int): Int {

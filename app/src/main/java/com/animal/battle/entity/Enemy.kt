@@ -30,6 +30,8 @@ class Enemy {
     var knockbackY = 0f
     var bornTimer = 0f        // 出生后的缩放/无敌过渡
     var wobblePhase = 0f      // 蝙蝠摆动相位
+    var weaponHitCooldown = 0f // 环绕武器命中冷却
+    var eliteFireTimer = 0f   // 精英怪散射弹幕冷却
 
     fun spawn(type: GameConfig.EnemyType, x: Float, y: Float, hpScale: Float = 1f, speedScale: Float = 1f) {
         this.type = type
@@ -53,6 +55,8 @@ class Enemy {
         this.vx = 0f
         this.vy = 0f
         this.wobblePhase = (Math.random() * Math.PI * 2).toFloat()
+        this.weaponHitCooldown = 0f
+        this.eliteFireTimer = 0f
     }
 
     fun takeDamage(amount: Float) {

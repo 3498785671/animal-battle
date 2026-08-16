@@ -53,14 +53,13 @@ class GameState {
 
     // 生成
     private var spawnTimer = 0f
-    private var spawnInterval = 1.1f
+    private var spawnInterval = 2.0f
     private var bossTimer = 0f
+    private var eliteTimer = 0f
     private val maxEnemies = 240
 
-    // 升级弹窗
-    var upgradeActive = false
-    private var pendingUpgradeCount = 0
-    val upgradeChoices = ArrayList<GameConfig.UpgradeDef>(3)
+    // 环绕武器
+    var orbitalAngle = 0f
 
     // 冲刺
     private var dashTimer = 0f
@@ -146,10 +145,10 @@ class GameState {
         kills = 0
         coinsEarned = 0
         spawnTimer = 0.5f
-        spawnInterval = 1.1f
+        spawnInterval = 2.0f
         bossTimer = 0f
-        pendingUpgradeCount = 0
-        upgradeActive = false
+        eliteTimer = 0f
+        orbitalAngle = 0f
         dashTimer = 0f
         slowTimer = 0f
         shakeTime = 0f
@@ -160,8 +159,10 @@ class GameState {
     fun update(dt: Float) {
         survivalTime += dt
         updatePlayer(dt)
+        updateOrbitalWeapon(dt)
         updateSpawner(dt)
         updateEnemies(dt)
+        updateElites(dt)
         updateBullets(dt)
         updateSummons(dt)
         checkCollisions()
@@ -176,12 +177,6 @@ class GameState {
         compactParticles()
 
         if (shakeTime > 0f) shakeTime -= dt
-
-        // 弹出升级三选一
-        if (pendingUpgradeCount > 0 && !upgradeActive) {
-            openUpgradeChoice()
-            pendingUpgradeCount--
-        }
     }
 
     // ================= 玩家 =================
@@ -204,31 +199,41 @@ class GameState {
 
         if (p.invincibleTimer > 0f) p.invincibleTimer -= dt
         if (slowTimer > 0f) slowTimer -= dt
-
-        // 自动攻击
-        p.attackTimer += dt
-        val interval = 1f / p.attackSpeed.coerceAtLeast(0.1f)
-        while (p.attackTimer >= interval) {
-            p.attackTimer -= interval
-            fireBullets()
-        }
     }
 
-    private fun fireBullets() {
+    /** 环绕武器：玩家周围旋转的能量球，碰到敌人造成伤害（替代弹幕普攻） */
+    private fun updateOrbitalWeapon(dt: Float) {
         val p = player
-        val target = nearestEnemy(p.x, p.y)
-        if (target == null) return
-        sound?.play(SoundManager.SHOOT, 0.4f)
-        val baseAngle = atan2(target.y - p.y, target.x - p.x)
-        val count = p.bullets
-        val spread = 0.22f
-        val speed = 640f
+        val tier = GameConfig.WeaponTiers.tierFor(p.level)
+        val count = GameConfig.WeaponTiers.count(tier)
+        val orbR = GameConfig.WeaponTiers.orbRadius(tier)
+        val orbitR = GameConfig.WeaponTiers.orbitRadius(p.level)
+        val dmgMul = GameConfig.WeaponTiers.damageMult(tier)
+        val baseDmg = p.attack * dmgMul
+        orbitalAngle += dt * 2.6f
+
+        val step = (Math.PI * 2.0 / count).toFloat()
         for (i in 0 until count) {
-            val offset = if (count == 1) 0f else (i - (count - 1) / 2f) * spread
-            val a = baseAngle + offset
-            val b = bulletPool.obtain()
-            b.spawn(p.x, p.y, cos(a) * speed, sin(a) * speed, p.attack, p.pierce)
-            bullets.add(b)
+            val a = orbitalAngle + i * step
+            val ox = p.x + cos(a.toDouble()).toFloat() * orbitR
+            val oy = p.y + sin(a.toDouble()).toFloat() * orbitR
+            // 碰撞敌人
+            for (e in enemies) {
+                if (!e.alive || e.weaponHitCooldown > 0f) continue
+                val dx = e.x - ox
+                val dy = e.y - oy
+                val r = e.radius + orbR
+                if (dx * dx + dy * dy <= r * r) {
+                    var dmg = baseDmg
+                    if (p.critChance > 0f && Math.random() < p.critChance) dmg *= p.critMult
+                    e.takeDamage(dmg)
+                    e.weaponHitCooldown = 0.3f
+                    sound?.play(SoundManager.HIT, 0.3f)
+                    // 击中粒子
+                    emit(e.x, e.y, 2, GameConfig.WeaponTiers.orbColors[tier], 80f, 3f, 0.15f)
+                    if (!e.alive) onEnemyDeath(e)
+                }
+            }
         }
     }
 
@@ -253,12 +258,19 @@ class GameState {
         spawnTimer -= dt
         if (spawnTimer <= 0f) {
             spawnTimer = spawnInterval
-            spawnInterval = (1.1f * 0.985f.pow(survivalTime / 5f)).coerceAtLeast(0.28f)
+            spawnInterval = (2.0f * 0.978f.pow(survivalTime / 8f)).coerceAtLeast(0.5f)
             spawnWave()
         }
-        // Boss 每 90 秒一只
+        // 精英怪每 2 分钟一只（散射弹幕）
+        eliteTimer += dt
+        if (eliteTimer >= GameConfig.EliteConfig.SPAWN_INTERVAL_SEC) {
+            eliteTimer = 0f
+            val (x, y) = randomEdgePos()
+            spawnEnemy(GameConfig.EnemyType.ELITE, x, y, 1f + survivalTime / 80f, 1f)
+        }
+        // Boss 每 4 分钟一只
         bossTimer += dt
-        if (bossTimer >= 90f) {
+        if (bossTimer >= 240f) {
             bossTimer = 0f
             val (x, y) = randomEdgePos()
             spawnEnemy(GameConfig.EnemyType.BOSS, x, y, 1f + survivalTime / 90f, 1f)
@@ -340,6 +352,32 @@ class GameState {
 
             if (e.hitFlash > 0f) e.hitFlash -= dt
             if (e.bornTimer > 0f) e.bornTimer -= dt
+            if (e.weaponHitCooldown > 0f) e.weaponHitCooldown -= dt
+        }
+    }
+
+    /** 精英怪散射弹幕（朝玩家扇形发射） */
+    private fun updateElites(dt: Float) {
+        val p = player
+        for (e in enemies) {
+            if (!e.alive || e.type != GameConfig.EnemyType.ELITE) continue
+            e.eliteFireTimer -= dt
+            if (e.eliteFireTimer > 0f) continue
+            e.eliteFireTimer = GameConfig.EliteConfig.FIRE_INTERVAL
+            val ang = atan2(p.y - e.y, p.x - e.x)
+            val count = GameConfig.EliteConfig.FAN_COUNT
+            val spread = 0.35f
+            val speed = GameConfig.EliteConfig.BULLET_SPEED
+            val dmg = e.damage * GameConfig.EliteConfig.BULLET_DAMAGE_MUL
+            for (i in 0 until count) {
+                val offset = if (count == 1) 0f else (i - (count - 1) / 2f) * spread
+                val a = ang + offset
+                val b = bulletPool.obtain()
+                b.spawn(e.x, e.y, cos(a) * speed, sin(a) * speed, dmg, 0,
+                    friendly = false, color = 0xFFEF5350.toInt(),
+                    radius = GameConfig.EliteConfig.BULLET_RADIUS, life = 4f)
+                bullets.add(b)
+            }
         }
     }
 
@@ -384,9 +422,9 @@ class GameState {
         grid.clear()
         for (e in enemies) if (e.alive) grid.insert(e)
 
-        // 子弹 vs 敌人
+        // 子弹 vs 敌人（仅玩家/友方子弹）
         for (b in bullets) {
-            if (!b.alive) continue
+            if (!b.alive || !b.friendly) continue
             grid.query(b.x, b.y, b.radius + 64f, queryBuf)
             for (e in queryBuf) {
                 if (!e.alive) continue
@@ -399,18 +437,29 @@ class GameState {
                     if (p.critChance > 0f && Math.random() < p.critChance) dmg *= p.critMult
                     e.takeDamage(dmg)
                     sound?.play(SoundManager.HIT, 0.35f)
-                    // 轻微击退
                     val kd = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
                     e.x += dx / kd * 3f
                     e.y += dy / kd * 3f
-                    // 爆裂弹：命中时范围伤害
-                    if (p.explosive) {
-                        explodeAt(e.x, e.y, 55f, b.damage * 0.6f)
-                    }
+                    if (p.explosive) explodeAt(e.x, e.y, 55f, b.damage * 0.6f)
                     if (!e.alive) onEnemyDeath(e)
                     if (b.pierce > 0) b.pierce-- else b.alive = false
                     if (!b.alive) break
                 }
+            }
+        }
+
+        // 敌人子弹 vs 玩家
+        for (b in bullets) {
+            if (!b.alive || b.friendly) continue
+            val dx = p.x - b.x
+            val dy = p.y - b.y
+            val r = p.radius + b.radius
+            if (dx * dx + dy * dy <= r * r) {
+                if (p.takeDamage(b.damage)) {
+                    emit(p.x, p.y, 4, 0xFFEF5350.toInt(), 80f, 3f, 0.2f)
+                    sound?.play(SoundManager.HURT, 0.4f)
+                }
+                b.alive = false
             }
         }
 
@@ -501,8 +550,12 @@ class GameState {
         when (pk.type) {
             Pickup.Type.EXP -> {
                 val gained = player.gainExp(pk.value)
-                pendingUpgradeCount += gained
-                if (gained > 0) sound?.play(SoundManager.LEVELUP, 0.5f)
+                if (gained > 0) {
+                    sound?.play(SoundManager.LEVELUP, 0.6f)
+                    emit(player.x, player.y, 16, GameConfig.WeaponTiers.orbColors[GameConfig.WeaponTiers.tierFor(player.level)], 220f, 5f, 0.6f)
+                    shakeTime = 0.12f
+                    shakePower = 4f
+                }
                 emit(pk.x, pk.y, 3, 0xFF7CE38B.toInt(), 60f, 3f, 0.25f)
             }
             Pickup.Type.COIN -> {
@@ -590,46 +643,6 @@ class GameState {
             }
         }
         return true
-    }
-
-    // ================= 升级三选一 =================
-    private fun openUpgradeChoice() {
-        upgradeChoices.clear()
-        val pool = GameConfig.UPGRADES.toMutableList()
-        for (i in 0 until 3) {
-            if (pool.isEmpty()) break
-            val idx = (Math.random() * pool.size).toInt()
-            upgradeChoices.add(pool.removeAt(idx))
-        }
-        upgradeActive = true
-    }
-
-    fun chooseUpgrade(def: GameConfig.UpgradeDef) {
-        applyUpgrade(def.id)
-        upgradeActive = false
-    }
-
-    private fun applyUpgrade(id: GameConfig.UpgradeId) {
-        val p = player
-        when (id) {
-            GameConfig.UpgradeId.ATK -> p.attackMult += 0.20f
-            GameConfig.UpgradeId.ATK_SPEED -> p.attackSpeedMult += 0.15f
-            GameConfig.UpgradeId.BULLETS -> p.bonusBullets += 1
-            GameConfig.UpgradeId.MOVE_SPEED -> p.moveSpeedMult += 0.12f
-            GameConfig.UpgradeId.MAX_HP -> {
-                p.maxHp += 25f
-                p.hp += 25f
-            }
-            GameConfig.UpgradeId.ARMOR -> p.armor = (p.armor + 0.10f).coerceAtMost(0.7f)
-            GameConfig.UpgradeId.PICKUP_RANGE -> p.pickupRange *= 1.4f
-            GameConfig.UpgradeId.LIFESTEAL -> p.lifesteal += 2f
-            GameConfig.UpgradeId.COOLDOWN -> p.cooldownMult *= 0.85f
-            GameConfig.UpgradeId.HEAL -> p.heal(p.maxHp * 0.4f)
-            GameConfig.UpgradeId.PIERCE -> p.pierce += 1
-            GameConfig.UpgradeId.EXPLOSIVE -> p.explosive = true
-            GameConfig.UpgradeId.CRIT -> p.critChance += 0.15f
-            GameConfig.UpgradeId.COIN_GAIN -> p.coinMult += 0.25f
-        }
     }
 
     // ================= 实体清理（对象池回收） =================

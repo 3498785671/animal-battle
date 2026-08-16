@@ -1,10 +1,13 @@
 package com.animal.battle.render
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import com.animal.battle.R
 import com.animal.battle.GameState
 import com.animal.battle.SummonFox
 import com.animal.battle.data.GameConfig
@@ -20,17 +23,35 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * 全部 Canvas 绘制：游戏世界、实体、粒子特效、HUD、摇杆、技能按钮、
- * 以及主菜单/养成/升级/结算界面。逻辑坐标宽 720。
+ * 全部 Canvas 绘制：游戏世界（像素贴图）、实体、特效、HUD、摇杆、技能按钮、
+ * 以及主菜单/养成/结算界面。逻辑坐标宽 720。
  */
-class Renderer {
+class Renderer(private val ctx: android.content.Context) {
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG)
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
+    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
 
-    // 背景装饰点（固定种子，避免每帧分配）
+    // 像素贴图（每个动物 2 帧）
+    private val foxFrames = arrayOfNulls<Bitmap>(2)
+    private val wolfFrames = arrayOfNulls<Bitmap>(2)
+    private val bearFrames = arrayOfNulls<Bitmap>(2)
+    private val boarFrames = arrayOfNulls<Bitmap>(2)
+    private val snakeFrames = arrayOfNulls<Bitmap>(2)
+    private val hedgehogFrames = arrayOfNulls<Bitmap>(2)
+    private val batFrames = arrayOfNulls<Bitmap>(2)
+    private val eliteFrames = arrayOfNulls<Bitmap>(2)
+    private val bossFrames = arrayOfNulls<Bitmap>(2)
+    private var expBitmap: Bitmap? = null
+    private var orbWhite: Bitmap? = null
+    private var orbGreen: Bitmap? = null
+    private var orbBlue: Bitmap? = null
+    private var orbPurple: Bitmap? = null
+    private var orbRed: Bitmap? = null
+
+    // 背景装饰点
     private val deco = ArrayList<FloatArray>(40)
 
     init {
@@ -38,17 +59,88 @@ class Renderer {
         for (i in 0 until 40) {
             deco.add(floatArrayOf(rnd.nextFloat() * 720f, rnd.nextFloat() * 1600f, 8f + rnd.nextFloat() * 20f))
         }
+        loadBitmaps()
+    }
+
+    private fun loadBitmaps() {
+        fun loadFrames(prefix: String, frames: Array<Bitmap?>): Array<Bitmap?> {
+            val res = ctx.resources
+            return arrayOf(
+                BitmapFactory.decodeResource(res, res.getIdentifier("${prefix}_0", "drawable", ctx.packageName)),
+                BitmapFactory.decodeResource(res, res.getIdentifier("${prefix}_1", "drawable", ctx.packageName)),
+            )
+        }
+        System.arraycopy(loadFrames("fox", foxFrames), 0, foxFrames, 0, 2)
+        System.arraycopy(loadFrames("wolf", wolfFrames), 0, wolfFrames, 0, 2)
+        System.arraycopy(loadFrames("bear", bearFrames), 0, bearFrames, 0, 2)
+        System.arraycopy(loadFrames("boar", boarFrames), 0, boarFrames, 0, 2)
+        System.arraycopy(loadFrames("snake", snakeFrames), 0, snakeFrames, 0, 2)
+        System.arraycopy(loadFrames("hedgehog", hedgehogFrames), 0, hedgehogFrames, 0, 2)
+        System.arraycopy(loadFrames("bat", batFrames), 0, batFrames, 0, 2)
+        System.arraycopy(loadFrames("elite", eliteFrames), 0, eliteFrames, 0, 2)
+        System.arraycopy(loadFrames("boss", bossFrames), 0, bossFrames, 0, 2)
+        val res = ctx.resources
+        expBitmap = BitmapFactory.decodeResource(res, R.drawable.exp)
+        orbWhite = BitmapFactory.decodeResource(res, R.drawable.orb_white)
+        orbGreen = BitmapFactory.decodeResource(res, R.drawable.orb_green)
+        orbBlue = BitmapFactory.decodeResource(res, R.drawable.orb_blue)
+        orbPurple = BitmapFactory.decodeResource(res, R.drawable.orb_purple)
+        orbRed = BitmapFactory.decodeResource(res, R.drawable.orb_red)
+    }
+
+    private fun framesForType(type: GameConfig.EnemyType): Array<Bitmap?> = when (type) {
+        GameConfig.EnemyType.WOLF -> wolfFrames
+        GameConfig.EnemyType.BEAR -> bearFrames
+        GameConfig.EnemyType.BOAR -> boarFrames
+        GameConfig.EnemyType.SNAKE -> snakeFrames
+        GameConfig.EnemyType.HEDGEHOG -> hedgehogFrames
+        GameConfig.EnemyType.BAT -> batFrames
+        GameConfig.EnemyType.ELITE -> eliteFrames
+        GameConfig.EnemyType.BOSS -> bossFrames
+    }
+
+    private fun orbForTier(tier: Int): Bitmap? = when (tier) {
+        1 -> orbGreen; 2 -> orbBlue; 3 -> orbPurple; 4 -> orbRed; else -> orbWhite
     }
 
     // ================= 世界渲染（在 scale 内调用） =================
     fun renderWorld(c: Canvas, s: GameState) {
         drawBackground(c, s)
+        // 环绕武器（底层，在角色下）
+        drawOrbs(c, s)
         for (pk in s.pickups) if (pk.alive) drawPickup(c, pk)
-        for (e in s.enemies) if (e.alive) drawEnemy(c, e)
+        for (e in s.enemies) if (e.alive) drawEnemy(c, e, s.survivalTime)
         for (f in s.summonFoxes) drawSummonFox(c, s.player, f)
-        drawPlayer(c, s.player, s.character)
+        drawPlayer(c, s.player)
         for (b in s.bullets) if (b.alive) drawBullet(c, b)
         for (p in s.particles) if (p.alive) drawParticle(c, p)
+    }
+
+    private val orbRect = RectF()
+    private val enemyRect = RectF()
+    private val playerRect = RectF()
+    private val pickupRect = RectF()
+
+    /** 绘制玩家周围的环绕能量体（白绿蓝紫红五阶） */
+    private fun drawOrbs(c: Canvas, s: GameState) {
+        val p = s.player
+        val tier = GameConfig.WeaponTiers.tierFor(p.level)
+        val count = GameConfig.WeaponTiers.count(tier)
+        val orbR = GameConfig.WeaponTiers.orbRadius(tier)
+        val orbitR = GameConfig.WeaponTiers.orbitRadius(p.level)
+        val bmp = orbForTier(tier) ?: return
+        // 与 updateOrbitalWeapon 同步的角速度
+        val baseAngle = s.orbitalAngle // private 但同文件可见（实际不行，下面补救）
+        // 公共访问：用 s.survivalTime * 2.6f 估算（GameState.orbitalAngle private，从 GameState 暴露）
+
+        val step = (Math.PI * 2.0 / count).toFloat()
+        for (i in 0 until count) {
+            val a = baseAngle + i * step
+            val ox = p.x + cos(a.toDouble()).toFloat() * orbitR
+            val oy = p.y + sin(a.toDouble()).toFloat() * orbitR
+            orbRect.set(ox - orbR, oy - orbR, ox + orbR, oy + orbR)
+            c.drawBitmap(bmp, null, orbRect, bitmapPaint)
+        }
     }
 
     private fun drawBackground(c: Canvas, s: GameState) {
@@ -74,193 +166,37 @@ class Renderer {
     }
 
     // ================= 玩家 =================
-    private fun drawPlayer(c: Canvas, p: Player, char: GameConfig.CharacterDef) {
-        // 面向：优先最近敌人方向（简化用摇杆方向，无输入朝上）
+    private fun drawPlayer(c: Canvas, p: Player) {
         var angle = -Math.PI / 2
         if (p.inputX != 0f || p.inputY != 0f) angle = kotlin.math.atan2(p.inputY.toDouble(), p.inputX.toDouble())
         val flash = p.invincibleTimer > 0f && ((p.invincibleTimer * 20).toInt() % 2 == 0)
-
-        val body = if (char.id == "panda") 0xFFF5F5F5.toInt() else char.color
-        val ear = when (char.id) {
-            "rabbit" -> 0xFFF48FB1.toInt()
-            "panda" -> 0xFF333333.toInt()
-            else -> char.color
-        }
-
+        val f = ((System.currentTimeMillis() / 200).toInt()) and 1
+        val bmp = foxFrames[f] ?: return
+        val size = p.radius * 3.0f
         c.save()
         c.translate(p.x, p.y)
-        if (flash) fill.color = 0x66FFFFFF
-
-        // 尾巴
-        fill.color = body
-        val tx = (-cos(angle).toFloat()) * p.radius * 0.9f
-        val ty = (-sin(angle).toFloat()) * p.radius * 0.9f
-        c.drawCircle(tx, ty, p.radius * 0.4f, fill)
-
-        // 耳朵
-        fill.color = ear
-        when (char.id) {
-            "rabbit" -> {
-                c.save(); c.rotate(-30f)
-                c.drawOval(RectF(-p.radius * 0.25f, -p.radius * 1.7f, p.radius * 0.25f, -p.radius * 0.4f), fill)
-                c.restore()
-                c.save(); c.rotate(30f)
-                c.drawOval(RectF(-p.radius * 0.25f, -p.radius * 1.7f, p.radius * 0.25f, -p.radius * 0.4f), fill)
-                c.restore()
-            }
-            "panda", "bear" -> {
-                c.drawCircle(-p.radius * 0.55f, -p.radius * 0.7f, p.radius * 0.35f, fill)
-                c.drawCircle(p.radius * 0.55f, -p.radius * 0.7f, p.radius * 0.35f, fill)
-            }
-            else -> {
-                path.reset()
-                path.moveTo(-p.radius * 0.7f, -p.radius * 0.4f)
-                path.lineTo(-p.radius * 0.45f, -p.radius * 1.3f)
-                path.lineTo(-p.radius * 0.1f, -p.radius * 0.6f)
-                path.close()
-                c.drawPath(path, fill)
-                path.reset()
-                path.moveTo(p.radius * 0.7f, -p.radius * 0.4f)
-                path.lineTo(p.radius * 0.45f, -p.radius * 1.3f)
-                path.lineTo(p.radius * 0.1f, -p.radius * 0.6f)
-                path.close()
-                c.drawPath(path, fill)
-            }
-        }
-
-        // 身体
-        fill.color = body
-        c.drawCircle(0f, 0f, p.radius, fill)
-        // 肚皮
-        fill.color = 0xFFFFFFFF.toInt()
-        c.drawCircle(0f, p.radius * 0.3f, p.radius * 0.5f, fill)
-
-        // 眼睛（朝 angle）
-        val ex = cos(angle).toFloat() * p.radius * 0.22f
-        val ey = sin(angle).toFloat() * p.radius * 0.22f
-        if (char.id == "panda") {
-            fill.color = 0xFF333333.toInt()
-            c.drawCircle(-p.radius * 0.32f, -p.radius * 0.15f, p.radius * 0.3f, fill)
-            c.drawCircle(p.radius * 0.32f, -p.radius * 0.15f, p.radius * 0.3f, fill)
-        }
-        fill.color = 0xFFFFFFFF.toInt()
-        c.drawCircle(-p.radius * 0.32f + ex, -p.radius * 0.15f + ey, p.radius * 0.2f, fill)
-        c.drawCircle(p.radius * 0.32f + ex, -p.radius * 0.15f + ey, p.radius * 0.2f, fill)
-        fill.color = 0xFF263238.toInt()
-        c.drawCircle(-p.radius * 0.32f + ex * 1.4f, -p.radius * 0.15f + ey * 1.4f, p.radius * 0.1f, fill)
-        c.drawCircle(p.radius * 0.32f + ex * 1.4f, -p.radius * 0.15f + ey * 1.4f, p.radius * 0.1f, fill)
-
+        c.rotate((angle * 180 / Math.PI + 90).toFloat())
+        bitmapPaint.alpha = if (flash) 90 else 255
+        playerRect.set(-size / 2f, -size / 2f, size / 2f, size / 2f)
+        c.drawBitmap(bmp, null, playerRect, bitmapPaint)
+        bitmapPaint.alpha = 255
         c.restore()
     }
 
     // ================= 敌人 =================
-    private fun drawEnemy(c: Canvas, e: Enemy) {
-        val r = e.radius * (if (e.bornTimer > 0f) (1f - e.bornTimer * 4f).coerceAtLeast(0.2f) else 1f)
-        val color = e.type.color
-        c.save()
-        c.translate(e.x, e.y)
-
-        // 精英/Boss 光环
-        if (e.type == GameConfig.EnemyType.ELITE || e.type == GameConfig.EnemyType.BOSS) {
-            stroke.color = color
-            stroke.strokeWidth = 4f
-            c.drawCircle(0f, 0f, r + 8f, stroke)
-        }
-
-        if (e.type == GameConfig.EnemyType.SNAKE) {
-            // 蛇：椭圆身体
-            c.rotate((e.angle * 180 / Math.PI).toFloat())
-            fill.color = color
-            c.drawOval(RectF(-r * 1.6f, -r * 0.7f, r * 1.6f, r * 0.7f), fill)
-            fill.color = 0xFFFFFFFF.toInt()
-            c.drawCircle(r * 1.4f, -r * 0.15f, r * 0.18f, fill)
-            c.drawCircle(r * 1.4f, r * 0.25f, r * 0.18f, fill)
-            fill.color = 0xFF263238.toInt()
-            c.drawCircle(r * 1.45f, -r * 0.15f, r * 0.09f, fill)
-            c.drawCircle(r * 1.45f, r * 0.25f, r * 0.09f, fill)
-        } else {
-            // 圆身体类
-            val earColor = color
-            // 耳朵
-            fill.color = earColor
-            if (e.type == GameConfig.EnemyType.BEAR || e.type == GameConfig.EnemyType.BOSS) {
-                c.drawCircle(-r * 0.55f, -r * 0.7f, r * 0.35f, fill)
-                c.drawCircle(r * 0.55f, -r * 0.7f, r * 0.35f, fill)
-            } else if (e.type == GameConfig.EnemyType.HEDGEHOG) {
-                c.drawCircle(-r * 0.5f, -r * 0.7f, r * 0.22f, fill)
-                c.drawCircle(r * 0.5f, -r * 0.7f, r * 0.22f, fill)
-            } else if (e.type == GameConfig.EnemyType.BOAR) {
-                c.drawCircle(-r * 0.5f, -r * 0.7f, r * 0.28f, fill)
-                c.drawCircle(r * 0.5f, -r * 0.7f, r * 0.28f, fill)
-            } else {
-                path.reset()
-                path.moveTo(-r * 0.7f, -r * 0.4f); path.lineTo(-r * 0.45f, -r * 1.3f); path.lineTo(-r * 0.1f, -r * 0.6f); path.close()
-                c.drawPath(path, fill)
-                path.reset()
-                path.moveTo(r * 0.7f, -r * 0.4f); path.lineTo(r * 0.45f, -r * 1.3f); path.lineTo(r * 0.1f, -r * 0.6f); path.close()
-                c.drawPath(path, fill)
-            }
-            // 身体
-            fill.color = color
-            c.drawCircle(0f, 0f, r, fill)
-            fill.color = 0x88FFFFFF.toInt()
-            c.drawCircle(0f, r * 0.3f, r * 0.5f, fill)
-            // 野猪獠牙
-            if (e.type == GameConfig.EnemyType.BOAR) {
-                fill.color = 0xFFFFFFFF.toInt()
-                path.reset()
-                path.moveTo(-r * 0.3f, r * 0.3f); path.lineTo(-r * 0.45f, r * 0.7f); path.lineTo(-r * 0.15f, r * 0.4f); path.close()
-                c.drawPath(path, fill)
-                path.reset()
-                path.moveTo(r * 0.3f, r * 0.3f); path.lineTo(r * 0.45f, r * 0.7f); path.lineTo(r * 0.15f, r * 0.4f); path.close()
-                c.drawPath(path, fill)
-            }
-            // 刺猬背刺
-            if (e.type == GameConfig.EnemyType.HEDGEHOG) {
-                fill.color = 0xFF37474F.toInt()
-                for (k in 0 until 7) {
-                    val ang = Math.PI + (k - 3) * 0.4
-                    val bx = cos(ang).toFloat() * r * 0.9f
-                    val by = sin(ang).toFloat() * r * 0.9f
-                    val ox = cos(ang).toFloat() * r * 1.4f
-                    val oy = sin(ang).toFloat() * r * 1.4f
-                    val tx = -sin(ang).toFloat() * 5f
-                    val ty = cos(ang).toFloat() * 5f
-                    path.reset()
-                    path.moveTo(bx - tx, by - ty)
-                    path.lineTo(ox, oy)
-                    path.lineTo(bx + tx, by + ty)
-                    path.close()
-                    c.drawPath(path, fill)
-                }
-            }
-            // 蝙蝠翅膀
-            if (e.type == GameConfig.EnemyType.BAT) {
-                fill.color = color
-                c.save(); c.rotate(-35f)
-                c.drawOval(RectF(-r * 1.6f, -r * 0.15f, -r * 0.2f, r * 0.5f), fill)
-                c.restore()
-                c.save(); c.rotate(35f)
-                c.drawOval(RectF(r * 0.2f, -r * 0.15f, r * 1.6f, r * 0.5f), fill)
-                c.restore()
-            }
-            // 眼睛
-            val ex = cos(e.angle.toDouble()).toFloat() * r * 0.2f
-            val ey = sin(e.angle.toDouble()).toFloat() * r * 0.2f
-            fill.color = 0xFFFFFFFF.toInt()
-            c.drawCircle(-r * 0.32f + ex, -r * 0.15f + ey, r * 0.2f, fill)
-            c.drawCircle(r * 0.32f + ex, -r * 0.15f + ey, r * 0.2f, fill)
-            fill.color = 0xFF263238.toInt()
-            c.drawCircle(-r * 0.32f + ex * 1.4f, -r * 0.15f + ey * 1.4f, r * 0.1f, fill)
-            c.drawCircle(r * 0.32f + ex * 1.4f, -r * 0.15f + ey * 1.4f, r * 0.1f, fill)
-        }
-
+    private fun drawEnemy(c: Canvas, e: Enemy, time: Float) {
+        val frames = framesForType(e.type)
+        val f = ((time * 6).toInt()) and 1
+        val bmp = frames[f] ?: return
+        val bornScale = if (e.bornTimer > 0f) (1f - e.bornTimer * 4f).coerceAtLeast(0.3f) else 1f
+        val size = e.radius * 2.5f * bornScale
+        enemyRect.set(e.x - size / 2f, e.y - size / 2f, e.x + size / 2f, e.y + size / 2f)
+        c.drawBitmap(bmp, null, enemyRect, bitmapPaint)
         // 受击白闪
         if (e.hitFlash > 0f) {
             fill.color = 0x88FFFFFF.toInt()
-            c.drawCircle(0f, 0f, r, fill)
+            c.drawCircle(e.x, e.y, e.radius, fill)
         }
-        c.restore()
     }
 
     private fun drawSummonFox(c: Canvas, p: Player, f: SummonFox) {
@@ -287,28 +223,23 @@ class Renderer {
     }
 
     private fun drawPickup(c: Canvas, pk: Pickup) {
+        val bmp = expBitmap ?: return
         val bob = sin((pk.bobPhase + System.currentTimeMillis() / 200.0)).toFloat() * 3f
         val y = pk.y + bob
-        when (pk.type) {
-            Pickup.Type.EXP -> {
-                fill.color = 0xFF43A047.toInt()
-                c.drawCircle(pk.x, y, 7f, fill)
-                fill.color = 0xFFB9F6CA.toInt()
-                c.drawCircle(pk.x - 2f, y - 2f, 2.5f, fill)
-            }
-            Pickup.Type.COIN -> {
-                fill.color = 0xFFFFB300.toInt()
-                c.drawCircle(pk.x, y, 8f, fill)
-                fill.color = 0xFFFFE082.toInt()
-                c.drawCircle(pk.x - 2f, y - 2f, 3f, fill)
-            }
-            Pickup.Type.HEART -> {
-                fill.color = 0xFFE53935.toInt()
-                c.drawCircle(pk.x, y, 9f, fill)
-                fill.color = 0xFFFF8A80.toInt()
-                c.drawCircle(pk.x - 3f, y - 3f, 3f, fill)
-            }
+        val size = when (pk.type) {
+            Pickup.Type.EXP -> 18f
+            Pickup.Type.COIN -> 18f
+            Pickup.Type.HEART -> 18f
         }
+        pickupRect.set(pk.x - size / 2f, y - size / 2f, pk.x + size / 2f, y + size / 2f)
+        c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
+        // 叠加颜色环以区分类型
+        fill.color = when (pk.type) {
+            Pickup.Type.COIN -> 0x88FFB300.toInt()
+            Pickup.Type.HEART -> 0x88E53935.toInt()
+            Pickup.Type.EXP -> 0x00000000
+        }
+        if (fill.color != 0) c.drawCircle(pk.x, y, 12f, fill)
     }
 
     private fun drawParticle(c: Canvas, pt: Particle) {
@@ -402,33 +333,6 @@ class Renderer {
             text.textSize = r * 0.6f
             text.textAlign = Paint.Align.CENTER
             c.drawText(skill.def.name.substring(0, 1), cx, cy + text.textSize * 0.35f, text)
-        }
-    }
-
-    // ================= 升级三选一 =================
-    fun renderUpgradeOverlay(c: Canvas, s: GameState, sw: Float, sh: Float, buttons: List<UIButton>) {
-        c.drawColor(0xAA000000.toInt())
-        val pad = sw * 0.08f
-        text.textAlign = Paint.Align.CENTER
-        text.textSize = sw * 0.08f
-        text.color = 0xFFFFD54F.toInt()
-        c.drawText("升 级 ！", sw / 2f, sh * 0.16f, text)
-        text.textSize = sw * 0.045f
-        text.color = 0xFFFFFFFF.toInt()
-        c.drawText("选择一项强化", sw / 2f, sh * 0.22f, text)
-
-        for (b in buttons) {
-            fill.color = if (b.enabled) 0xFF3E2723.toInt() else 0xFF555555.toInt()
-            c.drawRoundRect(b.rect, 20f, 20f, fill)
-            stroke.color = 0xFFFFB300.toInt()
-            stroke.strokeWidth = 3f
-            c.drawRoundRect(b.rect, 20f, 20f, stroke)
-            text.textSize = sw * 0.055f
-            text.color = 0xFFFFFFFF.toInt()
-            c.drawText(b.text, b.rect.centerX(), b.rect.centerY() - sw * 0.01f, text)
-            text.textSize = sw * 0.038f
-            text.color = 0xFFBDBDBD.toInt()
-            c.drawText(b.subtext, b.rect.centerX(), b.rect.centerY() + sw * 0.045f, text)
         }
     }
 
