@@ -12,8 +12,8 @@ object GameConfig {
     const val WORLD_W = 720f
 
     // ===== 玩家基础属性 =====
-    const val PLAYER_BASE_HP = 100f
-    const val PLAYER_BASE_ATTACK = 12f
+    const val PLAYER_BASE_HP = 300f
+    const val PLAYER_BASE_ATTACK = 24f
     const val PLAYER_BASE_ATTACK_SPEED = 1.6f   // 发/秒
     const val PLAYER_BASE_BULLETS = 1
     const val PLAYER_BASE_MOVE_SPEED = 280f     // 逻辑单位/秒
@@ -31,14 +31,14 @@ object GameConfig {
         val color: Int,
         val coin: Int,
     ) {
-        WOLF(30f, 65f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
-        BEAR(140f, 32f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
-        BOAR(60f, 85f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),      // 野猪：冲锋
-        SNAKE(45f, 47f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),     // 蛇：远程减速
-        ELITE(400f, 45f, 25f, 45f, 15, 0xFFB71C1C.toInt(), 8),   // 精英：体型更大
-        HEDGEHOG(60f, 35f, 22f, 18f, 3, 0xFF546E7A.toInt(), 2),  // 刺猬：慢、高伤
-        BAT(26f, 88f, 6f, 13f, 2, 0xFF7E57C2.toInt(), 2),        // 蝙蝠：快、脆
-        BOSS(1600f, 34f, 35f, 60f, 80, 0xFF7B1FA2.toInt(), 40),  // Boss
+        WOLF(30f, 33f, 8f, 17f, 1, 0xFF9E9E9E.toInt(), 1),      // 狼：快、脆
+        BEAR(140f, 16f, 20f, 28f, 4, 0xFF8D6E63.toInt(), 3),     // 熊：慢、肉
+        BOAR(60f, 43f, 12f, 19f, 2, 0xFF6D4C41.toInt(), 2),      // 野猪：冲锋
+        SNAKE(45f, 24f, 10f, 15f, 2, 0xFF66BB6A.toInt(), 2),     // 蛇：远程减速
+        ELITE(400f, 23f, 25f, 45f, 15, 0xFFB71C1C.toInt(), 8),   // 精英：体型更大
+        HEDGEHOG(60f, 18f, 22f, 18f, 3, 0xFF546E7A.toInt(), 2),  // 刺猬：慢、高伤
+        BAT(26f, 44f, 6f, 13f, 2, 0xFF7E57C2.toInt(), 2),        // 蝙蝠：快、脆
+        BOSS(1600f, 17f, 35f, 60f, 80, 0xFF7B1FA2.toInt(), 40),  // Boss
     }
 
     // 各敌人出现所需的生存秒数（解锁时间）
@@ -110,9 +110,9 @@ object GameConfig {
     )
 
     val SKILLS: List<SkillDef> = listOf(
-        SkillDef(SkillId.SHIELD, "牛盾", "获得 5 秒无敌护盾", 20f, 0xFF4FC3F7.toInt(), "skill1"),
-        SkillDef(SkillId.SUMMON_COW, "牛召", "召唤小牛辅助战斗", 25f, 0xFFFFD54F.toInt(), "skill2"),
-        SkillDef(SkillId.THUNDER, "牛雷", "全屏雷电秒杀", 30f, 0xFF7E57C2.toInt(), "skillmax"),
+        SkillDef(SkillId.SHIELD, "牛盾", "获得 5 秒无敌护盾", 10f, 0xFF4FC3F7.toInt(), "skill1"),
+        SkillDef(SkillId.SUMMON_COW, "牛召", "召唤小牛辅助战斗", 12f, 0xFFFFD54F.toInt(), "skill2"),
+        SkillDef(SkillId.THUNDER, "牛雷", "全屏雷电秒杀", 15f, 0xFF7E57C2.toInt(), "skillmax"),
     )
 
     // ===== 局外角色 =====

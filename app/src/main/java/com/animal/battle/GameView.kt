@@ -72,6 +72,8 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
             thread = Thread(GameThread(), "GameThread")
             thread!!.start()
         }
+        // 回到前台时若仍在游戏中，恢复 BGM
+        if (mode == GameMode.PLAYING && !paused) resumeBgm()
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -84,6 +86,8 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         running = false
+        // 切到后台时暂停 BGM（不释放）
+        pauseBgm()
         thread?.join(600)
         thread = null
     }
@@ -205,11 +209,13 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
                 // 暂停键
                 if (pauseBtn.contains(x, y)) {
                     paused = !paused
+                    if (paused) pauseBgm() else resumeBgm()
                     return
                 }
                 // 主页键（弹确认）
                 if (homeBtn.contains(x, y)) {
                     paused = true
+                    pauseBgm()
                     homeConfirmActive = true
                     return
                 }
@@ -358,6 +364,14 @@ class GameView(context: Context) : SurfaceView(context), SurfaceHolder.Callback 
             it.release()
         }
         bgm = null
+    }
+
+    private fun pauseBgm() {
+        bgm?.let { if (it.isPlaying) try { it.pause() } catch (_: Exception) {} }
+    }
+
+    private fun resumeBgm() {
+        bgm?.let { if (!it.isPlaying) try { it.start() } catch (_: Exception) {} }
     }
 
     private fun onGameOver() {

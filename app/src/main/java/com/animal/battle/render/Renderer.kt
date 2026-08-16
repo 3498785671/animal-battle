@@ -32,6 +32,7 @@ class Renderer(private val ctx: android.content.Context) {
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG)
     private val text = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
+    private val clipPath = Path()
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { isFilterBitmap = true }
 
     // 像素贴图（每个动物 2 帧）
@@ -131,6 +132,10 @@ class Renderer(private val ctx: android.content.Context) {
     private val pickupRect = RectF()
 
     /** 绘制旋转大宝剑 */
+    private val swordSrcRect = android.graphics.Rect()
+    private val swordDstRect = RectF()
+
+    /** 旋转大宝剑：剑头朝外尖刺式 + 剑尖白光 + 剑身光晕（视觉加工） */
     private fun drawSwords(c: Canvas, s: GameState) {
         val p = s.player
         val bmp = armsBitmap ?: return
@@ -139,16 +144,41 @@ class Renderer(private val ctx: android.content.Context) {
         val orbitR = GameConfig.SwordConfig.orbitRadius(p.level)
         val baseAngle = s.orbitalAngle
         val step = (Math.PI * 2.0 / count).toFloat()
-        val sw = swordLen / 3f
+
+        // arms.png 中剑的部分（右下角区域：剑从左上到右下的对角线）
+        val aw = bmp.width
+        val ah = bmp.height
+        swordSrcRect.set(aw / 2, ah / 2, aw, ah)
+
         for (i in 0 until count) {
             val a = baseAngle + i * step
-            val mx = p.x + cos(a.toDouble()).toFloat() * (orbitR + swordLen / 2f)
-            val my = p.y + sin(a.toDouble()).toFloat() * (orbitR + swordLen / 2f)
+            val cosA = cos(a.toDouble()).toFloat()
+            val sinA = sin(a.toDouble()).toFloat()
+            // 剑柄位置（玩家边缘）
+            val handleX = p.x + cosA * orbitR
+            val handleY = p.y + sinA * orbitR
+            // 剑尖位置（外围，尖刺扩散）
+            val tipX = p.x + cosA * (orbitR + swordLen)
+            val tipY = p.y + sinA * (orbitR + swordLen)
+            val mx = (handleX + tipX) / 2f
+            val my = (handleY + tipY) / 2f
+
             c.save()
-            c.rotate((a * 180 / Math.PI).toFloat() + 90f, mx, my)
-            swordRect.set(mx - swordLen / 2f, my - sw / 2f, mx + swordLen / 2f, my + sw / 2f)
-            c.drawBitmap(bmp, null, swordRect, bitmapPaint)
+            c.translate(mx, my)
+            // arms.png 中剑尖朝右下 45°，减 45° 让剑尖朝 a 方向（外侧）
+            c.rotate((a * 180 / Math.PI).toFloat() - 45f)
+            val dstW = swordLen * 0.75f
+            val dstH = swordLen * 0.38f
+            swordDstRect.set(-dstW / 2f, -dstH / 2f, dstW / 2f, dstH / 2f)
+            c.drawBitmap(bmp, swordSrcRect, swordDstRect, bitmapPaint)
             c.restore()
+
+            // 剑身半透明光晕（让剑融入场景）
+            fill.color = 0x33000000
+            c.drawCircle(mx, my, swordLen * 0.42f, fill)
+            // 剑尖白光
+            fill.color = 0xCCFFFFFF.toInt()
+            c.drawCircle(tipX, tipY, 5f, fill)
         }
     }
 
@@ -330,24 +360,34 @@ class Renderer(private val ctx: android.content.Context) {
             val cx = b.rect.centerX()
             val cy = b.rect.centerY()
             val r = b.rect.width() / 2f
-            // 底
-            fill.color = if (skill.isReady) 0xAAFFFFFF.toInt() else 0x66555555.toInt()
+            // 半透明圆底（深灰底座）
+            fill.color = if (skill.isReady) 0xCC444444.toInt() else 0x88333333.toInt()
             c.drawCircle(cx, cy, r, fill)
+            // 描边
             stroke.color = 0xFFFFFFFF.toInt()
             stroke.strokeWidth = 3f
             c.drawCircle(cx, cy, r, stroke)
             // 冷却遮罩
             if (!skill.isReady) {
                 val ratio = (skill.currentCooldown / skill.def.cooldown).coerceIn(0f, 1f)
-                fill.color = 0x88000000.toInt().toInt()
+                fill.color = 0x88000000.toInt()
                 c.drawArc(RectF(cx - r, cy - r, cx + r, cy + r), -90f, 360f * ratio, true, fill)
             }
-            // 技能图标
+            // 技能图标（圆形裁剪融入底座）
             val icon = skillIcons.getOrNull(i)
             if (icon != null) {
-                val ir = r * 0.85f
+                val ir = r * 0.80f
+                c.save()
+                clipPath.reset()
+                clipPath.addCircle(cx, cy, ir, Path.Direction.CW)
+                c.clipPath(clipPath)
                 skillRect.set(cx - ir, cy - ir, cx + ir, cy + ir)
                 c.drawBitmap(icon, null, skillRect, bitmapPaint)
+                c.restore()
+                // 图标内圈描边（增强"按钮"感）
+                stroke.color = 0x66FFFFFF.toInt()
+                stroke.strokeWidth = 2f
+                c.drawCircle(cx, cy, ir, stroke)
             } else {
                 fill.color = skill.def.color
                 c.drawCircle(cx, cy, r * 0.55f, fill)
