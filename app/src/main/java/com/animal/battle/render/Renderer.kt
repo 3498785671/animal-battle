@@ -166,8 +166,8 @@ class Renderer(private val ctx: android.content.Context) {
 
             c.save()
             c.translate(mx, my)
-            // arms.png 剑尖在右下 45° 方向，减 45° 让剑尖朝 a（外侧），牛头朝内
-            c.rotate((a * 180 / Math.PI).toFloat() - 45f)
+            // arms.png 已处理成剑尖竖直朝上（-90°），+90° 让剑尖指向 a 方向（外侧）
+            c.rotate((a * 180 / Math.PI).toFloat() + 90f)
             val size = swordLen * 0.95f
             swordDstRect.set(-size / 2f, -size / 2f, size / 2f, size / 2f)
             c.drawBitmap(bmp, null, swordDstRect, bitmapPaint)
@@ -266,6 +266,13 @@ class Renderer(private val ctx: android.content.Context) {
                 val size = if (pk.value >= 10) 28f else 18f
                 pickupRect.set(pk.x - size / 2f, y - size / 2f, pk.x + size / 2f, y + size / 2f)
                 c.drawBitmap(bmp, null, pickupRect, bitmapPaint)
+            }
+            Pickup.Type.GOLD_EXP -> {
+                // 金色经验球（大怪掉落）
+                fill.color = 0xFFFFD54F.toInt()
+                c.drawCircle(pk.x, y, 14f, fill)
+                fill.color = 0xFFFFF59D.toInt()
+                c.drawCircle(pk.x - 3f, y - 3f, 4f, fill)
             }
             Pickup.Type.COIN -> {
                 fill.color = 0xFFFFB300.toInt()

@@ -68,10 +68,10 @@ object GameConfig {
     // ===== 精英怪散射弹幕 =====
     object EliteConfig {
         const val SPAWN_INTERVAL_SEC = 120f  // 每 120 秒生成一只
-        const val FIRE_INTERVAL = 2.0f        // 散射冷却（秒）
-        const val FAN_COUNT = 4
-        const val BULLET_SPEED = 280f
-        const val BULLET_DAMAGE_MUL = 0.6f
+        const val FIRE_INTERVAL = 2.5f        // 散射冷却（秒）
+        const val FAN_COUNT = 2               // 一次散射子弹数（降低密度）
+        const val BULLET_SPEED = 260f
+        const val BULLET_DAMAGE_MUL = 0.55f
         const val BULLET_RADIUS = 5f
     }
 

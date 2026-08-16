@@ -382,8 +382,8 @@ class GameState {
             if (!e.alive || e.type != GameConfig.EnemyType.ELITE) continue
             e.eliteFireTimer -= dt
             if (e.eliteFireTimer > 0f) continue
-            // lion 阶段（120 秒）后降低弹幕攻击频率，避免满屏子弹
-            e.eliteFireTimer = if (survivalTime > 120f) 3.5f else GameConfig.EliteConfig.FIRE_INTERVAL
+            // lion 阶段（120 秒）后进一步降低弹幕攻击频率，避免满屏子弹
+            e.eliteFireTimer = if (survivalTime > 120f) 4.5f else GameConfig.EliteConfig.FIRE_INTERVAL
             val ang = atan2(p.y - e.y, p.x - e.x)
             val count = GameConfig.EliteConfig.FAN_COUNT
             val spread = 0.35f
@@ -512,8 +512,21 @@ class GameState {
     private fun onEnemyDeath(e: Enemy) {
         kills++
         sound?.play(SoundManager.EXPLOSION, 0.5f)
-        // 掉落经验球
-        spawnPickup(Pickup.Type.EXP, e.x, e.y, e.exp)
+        // 掉落经验球：大怪（Boss/精英/熊）掉多个金色经验球，普通怪掉绿色
+        val isBig = e.type == GameConfig.EnemyType.BOSS ||
+            e.type == GameConfig.EnemyType.ELITE ||
+            e.type == GameConfig.EnemyType.BEAR
+        if (isBig) {
+            val count = if (e.type == GameConfig.EnemyType.BOSS) 6 else 3
+            val per = (e.exp / count).coerceAtLeast(1)
+            for (i in 0 until count) {
+                val ox = e.x + (Math.random() * 36 - 18).toFloat()
+                val oy = e.y + (Math.random() * 36 - 18).toFloat()
+                spawnPickup(Pickup.Type.GOLD_EXP, ox, oy, per)
+            }
+        } else {
+            spawnPickup(Pickup.Type.EXP, e.x, e.y, e.exp)
+        }
         // 金币
         if (e.coin > 0 && Math.random() < 0.6) spawnPickup(Pickup.Type.COIN, e.x, e.y, e.coin)
         // 血包
@@ -587,6 +600,16 @@ class GameState {
                     shakePower = 4f
                 }
                 emit(pk.x, pk.y, 3, 0xFF7CE38B.toInt(), 60f, 3f, 0.25f)
+            }
+            Pickup.Type.GOLD_EXP -> {
+                val gained = player.gainExp(pk.value)
+                if (gained > 0) {
+                    sound?.play(SoundManager.LEVELUP, 0.6f)
+                    emit(player.x, player.y, 16, 0xFFFFFFFF.toInt(), 220f, 5f, 0.6f)
+                    shakeTime = 0.12f
+                    shakePower = 4f
+                }
+                emit(pk.x, pk.y, 4, 0xFFFFD54F.toInt(), 70f, 3f, 0.3f)
             }
             Pickup.Type.COIN -> {
                 coinsEarned += (pk.value * player.coinMult).toInt().coerceAtLeast(1)

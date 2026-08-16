@@ -1,8 +1,8 @@
 package com.animal.battle.entity
 
-/** 掉落物：经验球 / 金币 / 血包 */
+/** 掉落物：经验球 / 金币 / 血包 / 金色经验球 */
 class Pickup {
-    enum class Type { EXP, COIN, HEART }
+    enum class Type { EXP, COIN, HEART, GOLD_EXP }
 
     var type = Type.EXP
     var x = 0f
